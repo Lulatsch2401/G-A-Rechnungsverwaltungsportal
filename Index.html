@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auslagen-Verwaltung - Gut und Aussehend</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        /* Custom Vereinsfarben */
+        .bg-verein-pink { background-color: #E91E7E; }
+        .bg-verein-cyan { background-color: #4FD9D9; }
+        .bg-verein-darkblue { background-color: #0A1929; }
+        .text-verein-pink { color: #E91E7E; }
+        .text-verein-cyan { color: #4FD9D9; }
+        .text-verein-darkblue { color: #0A1929; }
+        .hover\:bg-verein-pink-dark:hover { background-color: #C81868; }
+        .hover\:bg-verein-cyan-dark:hover { background-color: #3CBFBF; }
+        .border-verein-pink { border-color: #E91E7E; }
+        .border-verein-cyan { border-color: #4FD9D9; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+        // Vereins-Logo als Base64
+        const LOGO_BASE64 = 'data:image/png;base64,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';
+
+        // App State
+        let state = {
+            currentUser: null,
+            view: 'login',
+            auslagen: [],
+            formData: {
+                betrag: '',
+                datum: new Date().toISOString().split('T')[0],
+                zweck: '',
+                kategorie: 'Kostüme',
+                beleg: null
+            }
+        };
+
+        // LocalStorage Functions
+        function loadData() {
+            const stored = localStorage.getItem('auslagen-data');
+            if (stored) {
+                state.auslagen = JSON.parse(stored);
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('auslagen-data', JSON.stringify(state.auslagen));
+        }
+
+        // Login
+        function handleLogin(name, rolle) {
+            if (!name.trim()) {
+                alert('Bitte Namen eingeben!');
+                return;
+            }
+            state.currentUser = { name, rolle };
+            state.view = rolle === 'kassenwart' ? 'dashboard' : 'meine-auslagen';
+            render();
+        }
+
+        // Logout
+        function handleLogout() {
+            state.currentUser = null;
+            state.view = 'login';
+            render();
+        }
+
+        // Beleg Upload
+        function handleBelegUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    state.formData.beleg = reader.result;
+                    render();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        // Remove Beleg
+        function removeBeleg() {
+            state.formData.beleg = null;
+            render();
+        }
+
+        // Submit Auslage
+        function handleSubmit(event) {
+            event.preventDefault();
+            
+            const neueAuslage = {
+                id: Date.now(),
+                mitglied: state.currentUser.name,
+                betrag: parseFloat(state.formData.betrag),
+                datum: state.formData.datum,
+                zweck: state.formData.zweck,
+                kategorie: state.formData.kategorie,
+                beleg: state.formData.beleg,
+                status: 'offen',
+                eingereichtAm: new Date().toISOString(),
+                bezahltAm: null
+            };
+
+            state.auslagen.push(neueAuslage);
+            saveData();
+            
+            // Reset Form
+            state.formData = {
+                betrag: '',
+                datum: new Date().toISOString().split('T')[0],
+                zweck: '',
+                kategorie: 'Kostüme',
+                beleg: null
+            };
+            
+            alert('Auslage erfolgreich eingereicht!');
+            state.view = 'meine-auslagen';
+            render();
+        }
+
+        // Update Status
+        function updateStatus(id, newStatus) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (auslage) {
+                auslage.status = newStatus;
+                if (newStatus === 'bezahlt') {
+                    auslage.bezahltAm = new Date().toISOString();
+                }
+                saveData();
+                render();
+            }
+        }
+
+        // View Beleg
+        function viewBeleg(belegData) {
+            window.open(belegData, '_blank');
+        }
+
+        // Export CSV
+        function exportCSV() {
+            const csv = [
+                ['Datum', 'Mitglied', 'Kategorie', 'Zweck', 'Betrag', 'Status', 'Eingereicht am', 'Bezahlt am'].join(';'),
+                ...state.auslagen.map(a => [
+                    a.datum,
+                    a.mitglied,
+                    a.kategorie,
+                    a.zweck,
+                    a.betrag.toFixed(2),
+                    a.status,
+                    new Date(a.eingereichtAm).toLocaleDateString('de-DE'),
+                    a.bezahltAm ? new Date(a.bezahltAm).toLocaleDateString('de-DE') : ''
+                ].join(';'))
+            ].join('\n');
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'auslagen_export_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+        }
+
+        // Render Functions
+        function renderLogin() {
+            return `
+                <div class="min-h-screen bg-gradient-to-br from-verein-darkblue via-verein-pink to-verein-cyan flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                        <div class="text-center mb-8">
+                            <img src="${LOGO_BASE64}" alt="Gut und Aussehend" class="w-48 h-48 mx-auto mb-4 object-contain" />
+                            <h2 class="text-2xl font-semibold text-gray-800">Auslagen-Verwaltung</h2>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <input
+                                type="text"
+                                id="loginName"
+                                placeholder="Dein Name"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                onkeypress="if(event.key === 'Enter') document.getElementById('loginMitglied').click()"
+                            />
+                            
+                            <button
+                                id="loginMitglied"
+                                onclick="handleLogin(document.getElementById('loginName').value, 'mitglied')"
+                                class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition"
+                            >
+                                Als Mitglied anmelden
+                            </button>
+                            
+                            <button
+                                onclick="handleLogin(document.getElementById('loginName').value, 'kassenwart')"
+                                class="w-full bg-verein-cyan text-white py-3 rounded-lg font-semibold hover:bg-verein-cyan-dark transition"
+                            >
+                                Als Kassenwart anmelden
+                            </button>
+                        </div>
+
+                        <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-blue-800"><strong>💡 Tipp:</strong> Daten werden lokal im Browser gespeichert</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNavigation() {
+            const isMitglied = state.currentUser.rolle === 'mitglied';
+            const isKassenwart = state.currentUser.rolle === 'kassenwart';
+
+            return `
+                <div class="bg-verein-pink text-white p-4 shadow-lg">
+                    <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <img src="${LOGO_BASE64}" alt="Logo" class="w-12 h-12 object-contain" />
+                            <div>
+                                <h1 class="text-2xl font-bold">Auslagen-Verwaltung</h1>
+                                <p class="text-cyan-200 text-sm">Angemeldet als: ${state.currentUser.name} (${state.currentUser.rolle === 'kassenwart' ? 'Kassenwart' : 'Mitglied'})</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${isMitglied ? `
+                                <button
+                                    onclick="state.view = 'meine-auslagen'; render();"
+                                    class="px-4 py-2 rounded ${state.view === 'meine-auslagen' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                >
+                                    Meine Auslagen
+                                </button>
+                                <button
+                                    onclick="state.view = 'neue-auslage'; render();"
+                                    class="px-4 py-2 rounded ${state.view === 'neue-auslage' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                >
+                                    + Neue Auslage
+                                </button>
+                            ` : ''}
+                            ${isKassenwart ? `
+                                <button
+                                    onclick="state.view = 'dashboard'; render();"
+                                    class="px-4 py-2 rounded ${state.view === 'dashboard' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                >
+                                    Dashboard
+                                </button>
+                                <button
+                                    onclick="exportCSV()"
+                                    class="px-4 py-2 rounded bg-green-500 hover:bg-green-600"
+                                >
+                                    📊 CSV Export
+                                </button>
+                            ` : ''}
+                            <button
+                                onclick="handleLogout()"
+                                class="px-4 py-2 rounded bg-red-500 hover:bg-red-600"
+                            >
+                                Abmelden
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNeueAuslage() {
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-2xl mx-auto p-6">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6">Neue Auslage erfassen</h2>
+                            
+                            <form onsubmit="handleSubmit(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Betrag (€) *
+                                    </label>
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        required
+                                        value="${state.formData.betrag}"
+                                        oninput="state.formData.betrag = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        placeholder="z.B. 12.50"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Datum *
+                                    </label>
+                                    <input
+                                        type="date"
+                                        required
+                                        value="${state.formData.datum}"
+                                        oninput="state.formData.datum = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Kategorie
+                                    </label>
+                                    <select
+                                        value="${state.formData.kategorie}"
+                                        onchange="state.formData.kategorie = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    >
+                                        <option ${state.formData.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
+                                        <option ${state.formData.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
+                                        <option ${state.formData.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
+                                        <option ${state.formData.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
+                                        <option ${state.formData.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
+                                        <option ${state.formData.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Zweck / Beschreibung *
+                                    </label>
+                                    <textarea
+                                        required
+                                        value="${state.formData.zweck}"
+                                        oninput="state.formData.zweck = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        rows="3"
+                                        placeholder="z.B. Stoffe für Kostüme, Getränke für Festwagen..."
+                                    >${state.formData.zweck}</textarea>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                                        Beleg hochladen *
+                                    </label>
+                                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                                        ${state.formData.beleg ? `
+                                            <div>
+                                                <img src="${state.formData.beleg}" alt="Beleg" class="max-w-full h-48 mx-auto mb-2 rounded" />
+                                                <button
+                                                    type="button"
+                                                    onclick="removeBeleg()"
+                                                    class="text-red-500 text-sm hover:text-red-700"
+                                                >
+                                                    🗑️ Entfernen
+                                                </button>
+                                            </div>
+                                        ` : `
+                                            <div class="text-gray-500 mb-2">📸</div>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onchange="handleBelegUpload(event)"
+                                                class="hidden"
+                                                id="beleg-upload"
+                                                required
+                                            />
+                                            <label
+                                                for="beleg-upload"
+                                                class="cursor-pointer text-verein-pink hover:text-verein-pink font-medium"
+                                            >
+                                                Foto auswählen oder hier klicken
+                                            </label>
+                                            <p class="text-xs text-gray-500 mt-2">JPG, PNG, max 10MB</p>
+                                        `}
+                                    </div>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition"
+                                >
+                                    Auslage einreichen
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMeineAuslagen() {
+            const meineAuslagen = state.auslagen.filter(a => a.mitglied === state.currentUser.name);
+            const summeOffen = meineAuslagen.filter(a => a.status === 'offen').reduce((sum, a) => sum + a.betrag, 0);
+            const summeBezahlt = meineAuslagen.filter(a => a.status === 'bezahlt').reduce((sum, a) => sum + a.betrag, 0);
+
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-6xl mx-auto p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Offen</p>
+                                        <p class="text-3xl font-bold text-verein-cyan">${summeOffen.toFixed(2)} €</p>
+                                    </div>
+                                    <div class="text-4xl">⏳</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Bezahlt</p>
+                                        <p class="text-3xl font-bold text-green-500">${summeBezahlt.toFixed(2)} €</p>
+                                    </div>
+                                    <div class="text-4xl">✅</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Gesamt</p>
+                                        <p class="text-3xl font-bold text-verein-pink">${meineAuslagen.length}</p>
+                                    </div>
+                                    <div class="text-4xl">📄</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-4">Meine Auslagen</h2>
+                                
+                                ${meineAuslagen.length === 0 ? `
+                                    <p class="text-gray-500 text-center py-8">Noch keine Auslagen erfasst</p>
+                                ` : `
+                                    <div class="space-y-4">
+                                        ${meineAuslagen.sort((a, b) => b.id - a.id).map(auslage => `
+                                            <div class="border rounded-lg p-4 hover:shadow-md transition">
+                                                <div class="flex flex-wrap justify-between items-start mb-2 gap-4">
+                                                    <div class="flex-1 min-w-0">
+                                                        <h3 class="font-semibold text-lg">${auslage.zweck}</h3>
+                                                        <p class="text-sm text-gray-500">${auslage.kategorie} • ${auslage.datum}</p>
+                                                    </div>
+                                                    <div class="text-right">
+                                                        <p class="text-2xl font-bold text-verein-pink">${auslage.betrag.toFixed(2)} €</p>
+                                                        <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                                                            auslage.status === 'offen' ? 'bg-cyan-100 text-verein-cyan' :
+                                                            auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' :
+                                                            'bg-green-100 text-green-700'
+                                                        }">
+                                                            ${auslage.status === 'offen' ? '⏳ Offen' :
+                                                              auslage.status === 'geprüft' ? '👀 Geprüft' :
+                                                              '✅ Bezahlt'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                ${auslage.beleg ? `
+                                                    <img 
+                                                        src="${auslage.beleg}" 
+                                                        alt="Beleg" 
+                                                        class="w-32 h-32 object-cover rounded mt-2 cursor-pointer hover:opacity-80" 
+                                                        onclick="viewBeleg('${auslage.beleg}')"
+                                                    />
+                                                ` : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDashboard() {
+            const offeneAuslagen = state.auslagen.filter(a => a.status === 'offen');
+            const gepruefteAuslagen = state.auslagen.filter(a => a.status === 'geprüft');
+            const bezahlteAuslagen = state.auslagen.filter(a => a.status === 'bezahlt');
+            
+            const summeOffen = offeneAuslagen.reduce((sum, a) => sum + a.betrag, 0);
+            const summeGeprueft = gepruefteAuslagen.reduce((sum, a) => sum + a.betrag, 0);
+            const summeBezahlt = bezahlteAuslagen.reduce((sum, a) => sum + a.betrag, 0);
+
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-6xl mx-auto p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Offen</p>
+                                        <p class="text-2xl font-bold text-verein-cyan">${summeOffen.toFixed(2)} €</p>
+                                        <p class="text-gray-400 text-xs">${offeneAuslagen.length} Positionen</p>
+                                    </div>
+                                    <div class="text-3xl">⚠️</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Geprüft</p>
+                                        <p class="text-2xl font-bold text-blue-500">${summeGeprueft.toFixed(2)} €</p>
+                                        <p class="text-gray-400 text-xs">${gepruefteAuslagen.length} Positionen</p>
+                                    </div>
+                                    <div class="text-3xl">👀</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Bezahlt</p>
+                                        <p class="text-2xl font-bold text-green-500">${summeBezahlt.toFixed(2)} €</p>
+                                        <p class="text-gray-400 text-xs">${bezahlteAuslagen.length} Positionen</p>
+                                    </div>
+                                    <div class="text-3xl">✅</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-sm">Gesamt</p>
+                                        <p class="text-2xl font-bold text-verein-pink">${state.auslagen.length}</p>
+                                        <p class="text-gray-400 text-xs">Alle Auslagen</p>
+                                    </div>
+                                    <div class="text-3xl">📊</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-4">Alle Auslagen</h2>
+                                
+                                ${state.auslagen.length === 0 ? `
+                                    <p class="text-gray-500 text-center py-8">Noch keine Auslagen vorhanden</p>
+                                ` : `
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Datum</th>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Zweck</th>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategorie</th>
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Betrag</th>
+                                                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Beleg</th>
+                                                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Status</th>
+                                                    <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Aktionen</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                ${state.auslagen.sort((a, b) => b.id - a.id).map(auslage => `
+                                                    <tr class="hover:bg-gray-50">
+                                                        <td class="px-4 py-3 text-sm">${auslage.datum}</td>
+                                                        <td class="px-4 py-3 text-sm font-medium">${auslage.mitglied}</td>
+                                                        <td class="px-4 py-3 text-sm">${auslage.zweck}</td>
+                                                        <td class="px-4 py-3 text-sm text-gray-500">${auslage.kategorie}</td>
+                                                        <td class="px-4 py-3 text-sm text-right font-semibold">${auslage.betrag.toFixed(2)} €</td>
+                                                        <td class="px-4 py-3 text-center">
+                                                            ${auslage.beleg ? `
+                                                                <button
+                                                                    onclick="viewBeleg('${auslage.beleg}')"
+                                                                    class="text-verein-pink hover:text-verein-pink text-sm"
+                                                                >
+                                                                    📄 Ansehen
+                                                                </button>
+                                                            ` : '-'}
+                                                        </td>
+                                                        <td class="px-4 py-3 text-center">
+                                                            <span class="inline-block px-3 py-1 rounded-full text-xs font-medium ${
+                                                                auslage.status === 'offen' ? 'bg-cyan-100 text-verein-cyan' :
+                                                                auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' :
+                                                                'bg-green-100 text-green-700'
+                                                            }">
+                                                                ${auslage.status}
+                                                            </span>
+                                                        </td>
+                                                        <td class="px-4 py-3 text-center">
+                                                            <div class="flex gap-1 justify-center flex-wrap">
+                                                                ${auslage.status === 'offen' ? `
+                                                                    <button
+                                                                        onclick="updateStatus(${auslage.id}, 'geprüft')"
+                                                                        class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
+                                                                        title="Als geprüft markieren"
+                                                                    >
+                                                                        ✓ Prüfen
+                                                                    </button>
+                                                                ` : ''}
+                                                                ${(auslage.status === 'offen' || auslage.status === 'geprüft') ? `
+                                                                    <button
+                                                                        onclick="updateStatus(${auslage.id}, 'bezahlt')"
+                                                                        class="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
+                                                                        title="Als bezahlt markieren"
+                                                                    >
+                                                                        💰 Bezahlen
+                                                                    </button>
+                                                                ` : ''}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                `).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Main Render Function
+        function render() {
+            const app = document.getElementById('app');
+            
+            if (!state.currentUser) {
+                app.innerHTML = renderLogin();
+            } else if (state.view === 'neue-auslage') {
+                app.innerHTML = renderNeueAuslage();
+            } else if (state.view === 'meine-auslagen') {
+                app.innerHTML = renderMeineAuslagen();
+            } else if (state.view === 'dashboard') {
+                app.innerHTML = renderDashboard();
+            }
+        }
+
+        // Initialize App
+        loadData();
+        render();
+    </script>
+</body>
+</html>
