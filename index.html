@@ -9,17 +9,44 @@
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
         }
-        /* Custom Vereinsfarben */
+        
+        /* Logo-optimierte Vereinsfarben - perfekt abgestimmt */
+        .bg-verein-darkblue { background-color: #0A1929; }
         .bg-verein-pink { background-color: #E91E7E; }
         .bg-verein-cyan { background-color: #4FD9D9; }
-        .bg-verein-darkblue { background-color: #0A1929; }
+        
+        .text-verein-darkblue { color: #0A192F; }
         .text-verein-pink { color: #E91E7E; }
         .text-verein-cyan { color: #4FD9D9; }
-        .text-verein-darkblue { color: #0A1929; }
-        .hover\:bg-verein-pink-dark:hover { background-color: #C81868; }
-        .hover\:bg-verein-cyan-dark:hover { background-color: #3CBFBF; }
+        
+        /* Dunklere Hover-Varianten */
+        .hover\:bg-verein-pink-dark:hover { background-color: #C2185B; }
+        .hover\:bg-verein-cyan-dark:hover { background-color: #26C6DA; }
+        .hover\:bg-verein-darkblue-dark:hover { background-color: #061A2B; }
+        
+        /* Border-Varianten */
         .border-verein-pink { border-color: #E91E7E; }
         .border-verein-cyan { border-color: #4FD9D9; }
+        .border-verein-darkblue { border-color: #0A1929; }
+        
+        /* Helle Varianten für bessere Lesbarkeit */
+        .bg-verein-pink-light { background-color: #FCE4EC; }
+        .bg-verein-cyan-light { background-color: #E0F7FA; }
+        
+        /* Perfekter Logo-Gradient */
+        .bg-gradient-verein {
+            background: linear-gradient(135deg, #0A1929 0%, #E91E7E 40%, #4FD9D9 100%);
+        }
+        
+        /* Focus-Rings für Barrierefreiheit */
+        .focus-verein\:ring-pink:focus { 
+            --tw-ring-color: #E91E7E;
+            --tw-ring-offset-width: 2px;
+        }
+        .focus-verein\:ring-cyan:focus { 
+            --tw-ring-color: #4FD9D9;
+            --tw-ring-offset-width: 2px;
+        }
     </style>
 </head>
 <body class="bg-gray-50">
@@ -170,7 +197,7 @@
         // Render Functions
         function renderLogin() {
             return `
-                <div class="min-h-screen bg-gradient-to-br from-verein-darkblue via-verein-pink to-verein-cyan flex items-center justify-center p-4">
+                <div class="min-h-screen bg-gradient-verein flex items-center justify-center p-4">
                     <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
                         <div class="text-center mb-8">
                             <img src="${LOGO_BASE64}" alt="Gut und Aussehend" class="w-48 h-48 mx-auto mb-4 object-contain" />
@@ -182,21 +209,21 @@
                                 type="text"
                                 id="loginName"
                                 placeholder="Dein Name"
-                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                 onkeypress="if(event.key === 'Enter') document.getElementById('loginMitglied').click()"
                             />
                             
                             <button
                                 id="loginMitglied"
                                 onclick="handleLogin(document.getElementById('loginName').value, 'mitglied')"
-                                class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition"
+                                class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark focus-verein:ring-pink transition-all"
                             >
                                 Als Mitglied anmelden
                             </button>
                             
                             <button
                                 onclick="handleLogin(document.getElementById('loginName').value, 'kassenwart')"
-                                class="w-full bg-verein-cyan text-white py-3 rounded-lg font-semibold hover:bg-verein-cyan-dark transition"
+                                class="w-full bg-verein-cyan text-white py-3 rounded-lg font-semibold hover:bg-verein-cyan-dark focus-verein:ring-cyan transition-all"
                             >
                                 Als Kassenwart anmelden
                             </button>
@@ -215,7 +242,7 @@
             const isKassenwart = state.currentUser.rolle === 'kassenwart';
 
             return `
-                <div class="bg-verein-pink text-white p-4 shadow-lg">
+                <div class="bg-gradient-verein text-white p-4 shadow-lg">
                     <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-4">
                         <div class="flex items-center gap-3">
                             <img src="${LOGO_BASE64}" alt="Logo" class="w-12 h-12 object-contain" />
@@ -228,13 +255,13 @@
                             ${isMitglied ? `
                                 <button
                                     onclick="state.view = 'meine-auslagen'; render();"
-                                    class="px-4 py-2 rounded ${state.view === 'meine-auslagen' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                    class="px-4 py-2 rounded ${state.view === 'meine-auslagen' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}"
                                 >
                                     Meine Auslagen
                                 </button>
                                 <button
                                     onclick="state.view = 'neue-auslage'; render();"
-                                    class="px-4 py-2 rounded ${state.view === 'neue-auslage' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                    class="px-4 py-2 rounded ${state.view === 'neue-auslage' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}"
                                 >
                                     + Neue Auslage
                                 </button>
@@ -242,7 +269,7 @@
                             ${isKassenwart ? `
                                 <button
                                     onclick="state.view = 'dashboard'; render();"
-                                    class="px-4 py-2 rounded ${state.view === 'dashboard' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink'}"
+                                    class="px-4 py-2 rounded ${state.view === 'dashboard' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}"
                                 >
                                     Dashboard
                                 </button>
@@ -284,7 +311,7 @@
                                         required
                                         value="${state.formData.betrag}"
                                         oninput="state.formData.betrag = this.value"
-                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                         placeholder="z.B. 12.50"
                                     />
                                 </div>
@@ -298,7 +325,7 @@
                                         required
                                         value="${state.formData.datum}"
                                         oninput="state.formData.datum = this.value"
-                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                     />
                                 </div>
 
@@ -309,7 +336,7 @@
                                     <select
                                         value="${state.formData.kategorie}"
                                         onchange="state.formData.kategorie = this.value"
-                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                     >
                                         <option ${state.formData.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
                                         <option ${state.formData.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
@@ -328,7 +355,7 @@
                                         required
                                         value="${state.formData.zweck}"
                                         oninput="state.formData.zweck = this.value"
-                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                         rows="3"
                                         placeholder="z.B. Stoffe für Kostüme, Getränke für Festwagen..."
                                     >${state.formData.zweck}</textarea>
@@ -362,7 +389,7 @@
                                             />
                                             <label
                                                 for="beleg-upload"
-                                                class="cursor-pointer text-verein-pink hover:text-verein-pink font-medium"
+                                                class="cursor-pointer text-verein-pink hover:bg-verein-pink-light px-3 py-1 rounded font-medium transition"
                                             >
                                                 Foto auswählen oder hier klicken
                                             </label>
@@ -373,7 +400,7 @@
 
                                 <button
                                     type="submit"
-                                    class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition"
+                                    class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark focus-verein:ring-pink transition-all"
                                 >
                                     Auslage einreichen
                                 </button>
@@ -441,8 +468,8 @@
                                                     <div class="text-right">
                                                         <p class="text-2xl font-bold text-verein-pink">${auslage.betrag.toFixed(2)} €</p>
                                                         <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${
-                                                            auslage.status === 'offen' ? 'bg-cyan-100 text-verein-cyan' :
-                                                            auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' :
+                                                            auslage.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
+                                                            auslage.status === 'geprüft' ? 'bg-verein-pink-light text-verein-pink' :
                                                             'bg-green-100 text-green-700'
                                                         }">
                                                             ${auslage.status === 'offen' ? '⏳ Offen' :
@@ -559,7 +586,7 @@
                                                             ${auslage.beleg ? `
                                                                 <button
                                                                     onclick="viewBeleg('${auslage.beleg}')"
-                                                                    class="text-verein-pink hover:text-verein-pink text-sm"
+                                                                    class="text-verein-pink hover:text-verein-pink-dark text-sm"
                                                                 >
                                                                     📄 Ansehen
                                                                 </button>
@@ -567,8 +594,8 @@
                                                         </td>
                                                         <td class="px-4 py-3 text-center">
                                                             <span class="inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                                                                auslage.status === 'offen' ? 'bg-cyan-100 text-verein-cyan' :
-                                                                auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' :
+                                                                auslage.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
+                                                                auslage.status === 'geprüft' ? 'bg-verein-pink-light text-verein-pink' :
                                                                 'bg-green-100 text-green-700'
                                                             }">
                                                                 ${auslage.status}
