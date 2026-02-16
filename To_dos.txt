@@ -3,3 +3,5 @@
 - Filter und summarizes für das Dashboard, um herauszufinden wie viel einzelne Personen bekommen/zahlen müssen
 
 Für später
+- Usernamen wie lfucke - mit oder ohne Passwort?
+- KassenwartUser für die Webbapp später welches Passwort etc.
