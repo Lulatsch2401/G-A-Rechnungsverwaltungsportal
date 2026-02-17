@@ -62,6 +62,11 @@
             view: 'login',
             auslagen: [],
             toast: null,
+            filter: {
+                mitglied: '',
+                status: '',
+                kategorie: ''
+            },
             modal: {
                     open: false,
                     mitglied: null,
@@ -238,6 +243,21 @@
             render();
         }
 
+        function deleteAuslage(id) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (!auslage) return;
+            if (state.currentUser.rolle === 'mitglied' && auslage.status !== 'offen') {
+                state.toast = 'Nur offene Auslagen können gelöscht werden!';
+                render();
+                return;
+            }
+            state.auslagen = state.auslagen.filter(a => a.id !== id);
+            saveData();
+            state.toast = 'Auslage erfolgreich gelöscht!';
+            render();
+        }
+       
+        
         function renderToast() {
             if (!state.toast) return '';
             return `
@@ -630,6 +650,14 @@
                                                         onclick="viewBeleg('${auslage.beleg}')"
                                                     />
                                                 ` : ''}
+                                                ${auslage.status === 'offen' ? `
+                                                    <button
+                                                        onclick="deleteAuslage(${auslage.id})"
+                                                        class="mt-3 px-3 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200 transition"
+                                                    >
+                                                        🗑️ Löschen
+                                                    </button>
+                                                ` : ''}
                                             </div>
                                         `).join('')}
                                     </div>
@@ -771,10 +799,55 @@
                         <div class="bg-white rounded-lg shadow overflow-hidden">
                             <div class="p-6">
                                 <h2 class="text-xl font-bold text-gray-800 mb-4">Alle Auslagen</h2>
-                                
-                                ${state.auslagen.length === 0 ? `
-                                    <p class="text-gray-500 text-center py-8">Noch keine Auslagen vorhanden</p>
-                                ` : `
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                                    <input
+                                        type="text"
+                                        placeholder="🔍 Mitglied suchen..."
+                                        value="${state.filter.mitglied}"
+                                        oninput="state.filter.mitglied = this.value; render();"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
+                                    />
+                                    <select
+                                        onchange="state.filter.status = this.value; render();"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
+                                    >
+                                        <option value="" ${state.filter.status === '' ? 'selected' : ''}>Alle Status</option>
+                                        <option value="offen" ${state.filter.status === 'offen' ? 'selected' : ''}>⏳ Offen</option>
+                                        <option value="geprüft" ${state.filter.status === 'geprüft' ? 'selected' : ''}>👀 Geprüft</option>
+                                        <option value="bezahlt" ${state.filter.status === 'bezahlt' ? 'selected' : ''}>✅ Bezahlt</option>
+                                    </select>
+                                    <select
+                                        onchange="state.filter.kategorie = this.value; render();"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
+                                    >
+                                        <option value="" ${state.filter.kategorie === '' ? 'selected' : ''}>Alle Kategorien</option>
+                                        <option value="Kostüme" ${state.filter.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
+                                        <option value="Dekoration" ${state.filter.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
+                                        <option value="Verpflegung" ${state.filter.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
+                                        <option value="Transport" ${state.filter.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
+                                        <option value="Musik/Technik" ${state.filter.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
+                                        <option value="Sonstiges" ${state.filter.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                    </select>
+                                </div>
+
+                                ${(() => {
+                                    const gefiltert = state.auslagen
+                                        .filter(a => 
+                                            (state.filter.mitglied === '' || a.mitglied.toLowerCase().includes(state.filter.mitglied.toLowerCase())) &&
+                                            (state.filter.status === '' || a.status === state.filter.status) &&
+                                            (state.filter.kategorie === '' || a.kategorie === state.filter.kategorie)
+                                        )
+                                        .sort((a, b) => b.id - a.id);
+
+                                    if (state.auslagen.length === 0) {
+                                        return '<p class="text-gray-500 text-center py-8">Noch keine Auslagen vorhanden</p>';
+                                    }
+                                    if (gefiltert.length === 0) {
+                                        return '<p class="text-gray-500 text-center py-8">Keine Auslagen für diesen Filter gefunden</p>';
+                                    }
+
+                                    return `
                                     <div class="overflow-x-auto">
                                         <table class="w-full">
                                             <thead class="bg-gray-50">
@@ -790,7 +863,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-gray-200">
-                                                ${state.auslagen.sort((a, b) => b.id - a.id).map(auslage => `
+                                                ${gefiltert.map(auslage => `
                                                     <tr class="hover:bg-gray-50">
                                                         <td class="px-4 py-3 text-sm">${auslage.datum}</td>
                                                         <td class="px-4 py-3 text-sm font-medium">${auslage.mitglied}</td>
@@ -836,14 +909,21 @@
                                                                         💰 Bezahlen
                                                                     </button>
                                                                 ` : ''}
+                                                                <button
+                                                                    onclick="deleteAuslage(${auslage.id})"
+                                                                    class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
+                                                                    title="Auslage löschen"
+                                                                >
+                                                                    🗑️
+                                                                </button>
                                                             </div>
                                                         </td>
                                                     </tr>
                                                 `).join('')}
                                             </tbody>
                                         </table>
-                                    </div>
-                                `}
+                                    </div>`;
+                                })()}
                             </div>
                         </div>
                     </div>
