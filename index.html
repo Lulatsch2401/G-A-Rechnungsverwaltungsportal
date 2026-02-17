@@ -61,6 +61,12 @@
             currentUser: null,
             view: 'login',
             auslagen: [],
+            toast: null,
+            modal: {
+                    open: false,
+                    mitglied: null,
+                    ausgewaehlt: []
+                    },            
             formData: {
                 betrag: '',
                 datum: new Date().toISOString().split('T')[0],
@@ -148,8 +154,8 @@
                 beleg: null
             };
             
-            alert('Auslage erfolgreich eingereicht!');
             state.view = 'meine-auslagen';
+            state.toast = 'Auslage erfolgreich eingereicht!';
             render();
         }
 
@@ -194,6 +200,144 @@
             link.click();
         }
 
+        function openBelegModal(mitglied) {
+            const belegeDesMitglieds = state.auslagen.filter(
+                a => a.mitglied === mitglied && (a.status === 'offen' || a.status === 'geprüft')
+            );
+            state.modal = {
+                open: true,
+                mitglied: mitglied,
+                belegeDesMitglieds: belegeDesMitglieds,
+                ausgewaehlt: []
+            };
+            render();
+        }
+
+        function toggleBeleg(id) {
+            const idx = state.modal.ausgewaehlt.indexOf(id);
+            if (idx === -1) {
+                state.modal.ausgewaehlt.push(id);
+            } else {
+                state.modal.ausgewaehlt.splice(idx, 1);
+            }
+            render();
+        }
+
+        function bezahleAusgewaehlt() {
+            if (state.modal.ausgewaehlt.length === 0) {
+                alert('Bitte mindestens einen Beleg auswählen!');
+                return;
+            }
+            state.modal.ausgewaehlt.forEach(id => updateStatus(id, 'bezahlt'));
+            state.modal = { open: false, mitglied: null, belegeDesMitglieds: [], ausgewaehlt: [] };
+            render();
+        }
+
+        function closeModal() {
+            state.modal = { open: false, mitglied: null, belegeDesMitglieds: [], ausgewaehlt: [] };
+            render();
+        }
+
+        function renderToast() {
+            if (!state.toast) return '';
+            return `
+                <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-verein-darkblue text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
+                    <span class="text-2xl">✅</span>
+                    <p class="font-semibold">${state.toast}</p>
+                    <button onclick="state.toast = null; render();" class="ml-4 bg-verein-pink hover:bg-verein-pink-dark px-3 py-1 rounded-lg text-sm font-semibold transition">
+                        OK
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderModal() {
+            if (!state.modal.open) return '';
+
+            const summeAusgewaehlt = state.modal.ausgewaehlt
+                .reduce((sum, id) => {
+                    const a = state.auslagen.find(a => a.id === id);
+                    return sum + (a ? a.betrag : 0);
+                }, 0);
+
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Belege von ${state.modal.mitglied}</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${state.modal.belegeDesMitglieds.length} offene Positionen</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+
+                        <div class="p-6 space-y-4">
+                            ${state.modal.belegeDesMitglieds.map(auslage => {
+                                const isChecked = state.modal.ausgewaehlt.includes(auslage.id);
+                                return `
+                                    <div 
+                                        onclick="toggleBeleg(${auslage.id})"
+                                        class="border-2 rounded-xl p-4 cursor-pointer transition-all ${isChecked ? 'border-verein-pink bg-verein-pink-light' : 'border-gray-200 hover:border-gray-300'}"
+                                    >
+                                        <div class="flex items-start gap-4">
+                                            <div class="mt-1">
+                                                <div class="w-6 h-6 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-verein-pink border-verein-pink' : 'border-gray-400'}">
+                                                    ${isChecked ? '<span class="text-white text-xs font-bold">✓</span>' : ''}
+                                                </div>
+                                            </div>
+                                            <div class="flex-1">
+                                                <div class="flex justify-between items-start">
+                                                    <div>
+                                                        <p class="font-semibold text-gray-800">${auslage.zweck}</p>
+                                                        <p class="text-sm text-gray-500">${auslage.kategorie} • ${auslage.datum}</p>
+                                                        <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' : 'bg-cyan-100 text-verein-cyan'}">
+                                                            ${auslage.status === 'geprüft' ? '👀 Geprüft' : '⏳ Offen'}
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-xl font-bold text-verein-pink ml-4">${auslage.betrag.toFixed(2)} €</p>
+                                                </div>
+                                                ${auslage.beleg ? `
+                                                    <img 
+                                                        src="${auslage.beleg}" 
+                                                        alt="Beleg" 
+                                                        class="w-full max-h-48 object-contain rounded-lg mt-3 border border-gray-200"
+                                                        onclick="event.stopPropagation(); viewBeleg('${auslage.beleg}')"
+                                                    />
+                                                    <p class="text-xs text-gray-400 mt-1 text-center">Klick auf Foto zum Vergrößern</p>
+                                                ` : '<p class="text-xs text-gray-400 mt-2">📎 Kein Beleg hochgeladen</p>'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-gray-600 text-sm">${state.modal.ausgewaehlt.length} von ${state.modal.belegeDesMitglieds.length} ausgewählt</p>
+                                <p class="text-2xl font-bold text-verein-pink">${summeAusgewaehlt.toFixed(2)} €</p>
+                            </div>
+                            <div class="flex gap-3">
+                                <button 
+                                    onclick="closeModal()"
+                                    class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                                >
+                                    Abbrechen
+                                </button>
+                                <button 
+                                    onclick="bezahleAusgewaehlt()"
+                                    class="flex-1 py-3 rounded-lg font-semibold text-white transition ${state.modal.ausgewaehlt.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-verein-pink hover:bg-verein-pink-dark'}"
+                                    ${state.modal.ausgewaehlt.length === 0 ? 'disabled' : ''}
+                                >
+                                    💰 ${state.modal.ausgewaehlt.length} Belege bezahlen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         // Render Functions
         function renderLogin() {
             return `
@@ -612,7 +756,7 @@
                                             .sort((a, b) => (b[1].offen + b[1].geprueft) - (a[1].offen + a[1].geprueft))
                                             .map(([name, betraege]) => {
                                                 const gesamt = betraege.offen + betraege.geprueft;
-                                                return `<tr class="hover:bg-gray-50">
+                                                return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="openBelegModal('${name}')">
                                                     <td class="px-4 py-3 text-sm font-medium">${name}</td>
                                                     <td class="px-4 py-3 text-sm text-right text-verein-cyan">${betraege.offen.toFixed(2)} €</td>
                                                     <td class="px-4 py-3 text-sm text-right text-blue-500">${betraege.geprueft.toFixed(2)} €</td>
@@ -710,18 +854,16 @@
         // Main Render Function
         function render() {
             const app = document.getElementById('app');
-            
             if (!state.currentUser) {
-                app.innerHTML = renderLogin();
+                app.innerHTML = renderLogin() + renderToast();
             } else if (state.view === 'neue-auslage') {
-                app.innerHTML = renderNeueAuslage();
+                app.innerHTML = renderNeueAuslage() + renderToast();
             } else if (state.view === 'meine-auslagen') {
-                app.innerHTML = renderMeineAuslagen();
+                app.innerHTML = renderMeineAuslagen() + renderToast();
             } else if (state.view === 'dashboard') {
-                app.innerHTML = renderDashboard();
+                app.innerHTML = renderDashboard() + renderModal() + renderToast();
             }
         }
-
         // Initialize App
         loadData();
         render();
