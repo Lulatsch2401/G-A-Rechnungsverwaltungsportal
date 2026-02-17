@@ -62,6 +62,7 @@
             view: 'login',
             auslagen: [],
             toast: null,
+            belegOverlay: null,
             filter: {
                 mitglied: '',
                 status: '',
@@ -178,8 +179,17 @@
         }
 
         // View Beleg
-        function viewBeleg(belegData) {
-            window.open(belegData, '_blank');
+        function viewBeleg(id) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (auslage && auslage.beleg) {
+                state.belegOverlay = auslage;
+                render();
+            }
+        }
+
+        function closeBelegOverlay() {
+            state.belegOverlay = null;
+            render();
         }
 
         // Export CSV
@@ -257,7 +267,83 @@
             render();
         }
        
-        
+        function renderBelegOverlay() {
+            if (!state.belegOverlay) return '';
+            const a = state.belegOverlay;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 z-50" onclick="closeBelegOverlay()"></div>
+                <div class="fixed top-0 right-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col">
+                    
+                    <div class="bg-verein-darkblue text-white p-5 flex justify-between items-center flex-shrink-0">
+                        <div>
+                            <p class="text-xs text-cyan-300 mb-1">Beleg von</p>
+                            <h2 class="text-lg font-bold">${a.mitglied}</h2>
+                        </div>
+                        <button 
+                            onclick="closeBelegOverlay()"
+                            class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold transition"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <div class="p-5 border-b border-gray-100 flex-shrink-0">
+                        <h3 class="font-semibold text-gray-800 text-lg mb-1">${a.zweck}</h3>
+                        <div class="flex flex-wrap gap-3 mt-2">
+                            <span class="text-2xl font-bold text-verein-pink">${a.betrag.toFixed(2)} €</span>
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                                a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
+                                a.status === 'geprüft' ? 'bg-verein-pink-light text-verein-pink' :
+                                'bg-green-100 text-green-700'
+                            }">
+                                ${a.status === 'offen' ? '⏳ Offen' :
+                                  a.status === 'geprüft' ? '👀 Geprüft' :
+                                  '✅ Bezahlt'}
+                            </span>
+                        </div>
+                        <div class="flex gap-4 mt-3 text-sm text-gray-500">
+                            <span>📅 ${a.datum}</span>
+                            <span>🏷️ ${a.kategorie}</span>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto p-5">
+                        <p class="text-xs text-gray-400 uppercase font-semibold mb-3">Beleg-Foto</p>
+                        <img 
+                            src="${a.beleg}" 
+                            alt="Beleg" 
+                            class="w-full object-contain rounded-xl border border-gray-200"
+                        />
+                    </div>
+
+                    <div class="p-5 border-t border-gray-100 flex-shrink-0 flex gap-3">
+                        <button 
+                            onclick="closeBelegOverlay()"
+                            class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                        >
+                            Schließen
+                        </button>
+                        ${a.status === 'offen' ? `
+                            <button 
+                                onclick="updateStatus(${a.id}, 'geprüft'); closeBelegOverlay();"
+                                class="flex-1 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold transition"
+                            >
+                                👀 Prüfen
+                            </button>
+                        ` : ''}
+                        ${a.status === 'geprüft' ? `
+                            <button 
+                                onclick="updateStatus(${a.id}, 'bezahlt'); closeBelegOverlay();"
+                                class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition"
+                            >
+                                💰 Bezahlen
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
         function renderToast() {
             if (!state.toast) return '';
             return `
@@ -322,9 +408,7 @@
                                                         src="${auslage.beleg}" 
                                                         alt="Beleg" 
                                                         class="w-full max-h-48 object-contain rounded-lg mt-3 border border-gray-200"
-                                                        onclick="event.stopPropagation(); viewBeleg('${auslage.beleg}')"
                                                     />
-                                                    <p class="text-xs text-gray-400 mt-1 text-center">Klick auf Foto zum Vergrößern</p>
                                                 ` : '<p class="text-xs text-gray-400 mt-2">📎 Kein Beleg hochgeladen</p>'}
                                             </div>
                                         </div>
@@ -647,7 +731,7 @@
                                                         src="${auslage.beleg}" 
                                                         alt="Beleg" 
                                                         class="w-32 h-32 object-cover rounded mt-2 cursor-pointer hover:opacity-80" 
-                                                        onclick="viewBeleg('${auslage.beleg}')"
+                                                        onclick="viewBeleg(${auslage.id})"
                                                     />
                                                 ` : ''}
                                                 ${auslage.status === 'offen' ? `
@@ -873,7 +957,7 @@
                                                         <td class="px-4 py-3 text-center">
                                                             ${auslage.beleg ? `
                                                                 <button
-                                                                    onclick="viewBeleg('${auslage.beleg}')"
+                                                                    onclick="viewBeleg(${auslage.id})"
                                                                     class="text-verein-pink hover:text-verein-pink-dark text-sm"
                                                                 >
                                                                     📄 Ansehen
@@ -937,11 +1021,11 @@
             if (!state.currentUser) {
                 app.innerHTML = renderLogin() + renderToast();
             } else if (state.view === 'neue-auslage') {
-                app.innerHTML = renderNeueAuslage() + renderToast();
+                app.innerHTML = renderNeueAuslage() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'meine-auslagen') {
-                app.innerHTML = renderMeineAuslagen() + renderToast();
+                app.innerHTML = renderMeineAuslagen() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'dashboard') {
-                app.innerHTML = renderDashboard() + renderModal() + renderToast();
+                app.innerHTML = renderDashboard() + renderModal() + renderBelegOverlay() + renderToast();
             }
         }
         // Initialize App
