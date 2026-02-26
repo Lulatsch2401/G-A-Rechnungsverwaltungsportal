@@ -1,6 +1,30 @@
-- Einträge bearbeiten Kassenwart nur Kateggorien, außerdem die Möglich dass der die Kategorien selbst pflegen kann und Kosstenübersichtemn als PDFs und Tabellen erstellen
+- Möglich dass der die Kategorien selbst pflegen kann und Kosstenübersichtemn als PDFs und Tabellen erstellen
+- Filter anpassen springt immmer beim Eintragen von Namen
+- Geprüft entfernen 
+- Tipp beim Einloggen Anpassen durch einen Hinweis wie man sich anmelden kann mit dem Nutzernamen +
+- Einlogg Maske anpassne neuer workflow - Beim eintragen des Namens das validieren und dann Passwort abfrage für Kassenwart
 
 
 Für später
-- Usernamen wie lfucke - mit oder ohne Passwort?
+- Usernamen wie lfucke - ohne Passwort nur Passwort für Kassenwart
 - KassenwartUser für die Webbapp später welches Passwort etc.
+
+Dekoration --Gestaltung
+Transport -- Allgemeines
+Bauen
+
+Musisik technik, sonstiges raus
+
+Altstadttanz + Weihnachtsfeier
+Wurfmaterial 
+
+Finale Liste 
+Köstüme
+Gestaltung
+Allgemeines
+Bauen
+Altstadttanz
+Weihnachtsfeier
+Verpflägung bauen
+Wurfmaterial/Getränke
+Technik
