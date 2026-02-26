@@ -73,6 +73,21 @@
                 auslage: null,
                 formData: {}
             },
+            kategorien: [
+                'Kostüme',
+                'Gestaltung',
+                'Allgemeines',
+                'Bauen',
+                'Altstadttanz',
+                'Weihnachtsfeier',
+                'Verpflegung bauen',
+                'Wurfmaterial/Getränke',
+                'Technik'
+            ],
+            kategorienModal: {
+                open: false,
+                neueKategorie: ''
+            },
             modal: {
                     open: false,
                     mitglied: null,
@@ -93,11 +108,68 @@
             if (stored) {
                 state.auslagen = JSON.parse(stored);
             }
+            const kategorien = localStorage.getItem('kategorien');
+            if (kategorien) {
+                state.kategorien = JSON.parse(kategorien);
+            }
         }
 
-        function saveData() {
+       function saveData() {
             localStorage.setItem('auslagen-data', JSON.stringify(state.auslagen));
+            localStorage.setItem('kategorien', JSON.stringify(state.kategorien));
         }
+
+        let debounceTimer;
+        function debounceRender(delay = 300) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => render(), delay);
+        }
+
+        // Kategorien-Verwaltung
+        function openKategorienModal() {
+            state.kategorienModal = { open: true, neueKategorie: '' };
+            render();
+        }
+
+        function closeKategorienModal() {
+            state.kategorienModal = { open: false, neueKategorie: '' };
+            render();
+        }
+
+        function addKategorie() {
+            const name = state.kategorienModal.neueKategorie.trim();
+            if (!name) {
+                state.toast = 'Bitte einen Namen eingeben!';
+                render();
+                return;
+            }
+            if (state.kategorien.includes(name)) {
+                state.toast = 'Diese Kategorie existiert bereits!';
+                render();
+                return;
+            }
+            state.kategorien.push(name);
+            state.kategorien.sort();
+            saveData();
+            state.kategorienModal.neueKategorie = '';
+            state.toast = 'Kategorie erfolgreich hinzugefügt!';
+            render();
+        }
+
+        function deleteKategorie(name) {
+            const inUse = state.auslagen.some(a => a.kategorie === name);
+            if (inUse) {
+                state.toast = 'Kategorie wird noch von Auslagen verwendet und kann nicht gelöscht werden!';
+                render();
+                return;
+            }
+            state.kategorien = state.kategorien.filter(k => k !== name);
+            saveData();
+            state.toast = 'Kategorie erfolgreich gelöscht!';
+            render();
+        }
+
+ 
 
         // Login
         function handleLogin(name, rolle) {
@@ -117,17 +189,46 @@
             render();
         }
 
-        // Beleg Upload
+        // Beleg Upload mit Kompression
         function handleBelegUpload(event) {
             const file = event.target.files[0];
             if (file) {
                 const reader = new FileReader();
                 reader.onloadend = () => {
-                    state.formData.beleg = reader.result;
-                    render();
+                    compressImage(reader.result, (compressed) => {
+                        state.formData.beleg = compressed;
+                        render();
+                    });
                 };
                 reader.readAsDataURL(file);
             }
+        }
+
+        // Bildkompression
+        function compressImage(base64, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                
+                // Max 800px Breite
+                const maxWidth = 800;
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Qualität 0.7 = guter Kompromiss
+                callback(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = base64;
         }
 
         // Remove Beleg
@@ -492,17 +593,14 @@
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
-                                <select
-                                    onchange="state.editModal.formData.kategorie = this.value; render();"
-                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
-                                >
-                                    <option ${state.editModal.formData.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
-                                    <option ${state.editModal.formData.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
-                                    <option ${state.editModal.formData.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
-                                    <option ${state.editModal.formData.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
-                                    <option ${state.editModal.formData.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
-                                    <option ${state.editModal.formData.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
-                                </select>
+                                    <select
+                                        onchange="state.editModal.formData.kategorie = this.value; render();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    >
+                                        ${state.kategorien.map(kat => `
+                                            <option ${state.editModal.formData.kategorie === kat ? 'selected' : ''}>${kat}</option>
+                                        `).join('')}
+                                    </select>
                             </div>
 
                             <div>
@@ -556,6 +654,84 @@
                                 class="flex-1 py-3 rounded-lg bg-verein-pink hover:bg-verein-pink-dark text-white font-semibold transition"
                             >
                                 ✓ Änderungen speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderKategorienModal() {
+            if (!state.kategorienModal.open) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeKategorienModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Kategorien verwalten</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${state.kategorien.length} Kategorien</p>
+                            </div>
+                            <button onclick="closeKategorienModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Neue Kategorie hinzufügen</label>
+                                <div class="flex gap-2">
+                                    <input
+                                        type="text"
+                                        id="neue-kategorie-input"
+                                        placeholder="z.B. Dekoration"
+                                        value="${state.kategorienModal.neueKategorie}"
+                                        oninput="state.kategorienModal.neueKategorie = this.value"
+                                        onkeypress="if(event.key === 'Enter') addKategorie()"
+                                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    />
+                                    <button
+                                        onclick="addKategorie()"
+                                        class="px-4 py-2 bg-verein-pink hover:bg-verein-pink-dark text-white rounded-lg font-semibold transition"
+                                    >
+                                        + Hinzufügen
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="border-t pt-4">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3">Bestehende Kategorien</h3>
+                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                    ${state.kategorien.map(kat => {
+                                        const inUse = state.auslagen.some(a => a.kategorie === kat);
+                                        return `
+                                            <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                                <span class="font-medium text-gray-700">${kat}</span>
+                                                <div class="flex items-center gap-2">
+                                                    ${inUse ? `
+                                                        <span class="text-xs text-gray-400 bg-white px-2 py-1 rounded">in Benutzung</span>
+                                                    ` : ''}
+                                                    <button
+                                                        onclick="deleteKategorie('${kat.replace(/'/g, "\\'")}')"
+                                                        class="px-3 py-1 ${inUse ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-600 hover:bg-red-200'} text-xs rounded transition"
+                                                        ${inUse ? 'disabled' : ''}
+                                                        title="${inUse ? 'Kategorie wird verwendet' : 'Kategorie löschen'}"
+                                                    >
+                                                        🗑️ Löschen
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+                            <button 
+                                onclick="closeKategorienModal()"
+                                class="w-full py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                            >
+                                Fertig
                             </button>
                         </div>
                     </div>
@@ -741,6 +917,12 @@
                                     Dashboard
                                 </button>
                                 <button
+                                    onclick="openKategorienModal()"
+                                    class="px-4 py-2 rounded bg-verein-cyan hover:bg-verein-cyan-dark"
+                                >
+                                    🏷️ Kategorien
+                                </button>
+                                <button
                                     onclick="exportCSV()"
                                     class="px-4 py-2 rounded bg-green-500 hover:bg-green-600"
                                 >
@@ -805,12 +987,9 @@
                                         onchange="state.formData.kategorie = this.value"
                                         class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus-verein:ring-pink focus:outline-none"
                                     >
-                                        <option ${state.formData.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
-                                        <option ${state.formData.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
-                                        <option ${state.formData.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
-                                        <option ${state.formData.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
-                                        <option ${state.formData.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
-                                        <option ${state.formData.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                        ${state.kategorien.map(kat => `
+                                            <option ${state.formData.kategorie === kat ? 'selected' : ''}>${kat}</option>
+                                        `).join('')}
                                     </select>
                                 </div>
 
@@ -1114,13 +1293,14 @@
                                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
                                     <input
                                         type="text"
+                                        id="filter-mitglied"
                                         placeholder="🔍 Mitglied suchen..."
                                         value="${state.filter.mitglied}"
-                                        oninput="state.filter.mitglied = this.value; render();"
+                                        oninput="state.filter.mitglied = this.value; debounceRender();"
                                         class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
                                     />
                                     <select
-                                        onchange="state.filter.status = this.value; render();"
+                                        onchange="state.filter.status = this.value; debounceRender(0);"
                                         class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
                                     >
                                         <option value="" ${state.filter.status === '' ? 'selected' : ''}>Alle Status</option>
@@ -1129,16 +1309,13 @@
                                         <option value="bezahlt" ${state.filter.status === 'bezahlt' ? 'selected' : ''}>✅ Bezahlt</option>
                                     </select>
                                     <select
-                                        onchange="state.filter.kategorie = this.value; render();"
+                                        onchange="state.filter.kategorie = this.value; debounceRender(0);"
                                         class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none"
                                     >
                                         <option value="" ${state.filter.kategorie === '' ? 'selected' : ''}>Alle Kategorien</option>
-                                        <option value="Kostüme" ${state.filter.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
-                                        <option value="Dekoration" ${state.filter.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
-                                        <option value="Verpflegung" ${state.filter.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
-                                        <option value="Transport" ${state.filter.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
-                                        <option value="Musik/Technik" ${state.filter.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
-                                        <option value="Sonstiges" ${state.filter.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                        ${state.kategorien.map(kat => `
+                                            <option value="${kat}" ${state.filter.kategorie === kat ? 'selected' : ''}>${kat}</option>
+                                        `).join('')}
                                     </select>
                                 </div>
 
@@ -1251,6 +1428,10 @@
 
         // Main Render Function
         function render() {
+            const scrollPos = window.scrollY;
+            const activeEl = document.activeElement;
+            const activeId = activeEl ? activeEl.id : null;
+            const cursorPos = activeEl && activeEl.selectionStart !== undefined ? activeEl.selectionStart : null;
             const app = document.getElementById('app');
             if (!state.currentUser) {
                 app.innerHTML = renderLogin() + renderToast();
@@ -1259,8 +1440,22 @@
             } else if (state.view === 'meine-auslagen') {
                 app.innerHTML = renderMeineAuslagen() + renderEditModal() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'dashboard') {
-                app.innerHTML = renderDashboard() + renderModal() + renderEditModal() + renderBelegOverlay() + renderToast();
+                app.innerHTML = renderDashboard() + renderModal() + renderKategorienModal() + renderEditModal() + renderBelegOverlay() + renderToast();
             }
+            
+            // Scroll-Position und Fokus wiederherstellen
+            setTimeout(() => {
+                window.scrollTo(0, scrollPos);
+                if (activeId) {
+                    const el = document.getElementById(activeId);
+                    if (el) {
+                        el.focus();
+                        if (cursorPos !== null && el.setSelectionRange) {
+                            el.setSelectionRange(cursorPos, cursorPos);
+                        }
+                    }
+                }
+            }, 0);
         }
         // Initialize App
         loadData();
