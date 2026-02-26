@@ -68,6 +68,11 @@
                 status: '',
                 kategorie: ''
             },
+            editModal: {
+                open: false,
+                auslage: null,
+                formData: {}
+            },
             modal: {
                     open: false,
                     mitglied: null,
@@ -135,7 +140,7 @@
         function handleSubmit(event) {
             event.preventDefault();
             
-            const neueAuslage = {
+        const neueAuslage = {
                 id: Date.now(),
                 mitglied: state.currentUser.name,
                 betrag: parseFloat(state.formData.betrag),
@@ -145,7 +150,12 @@
                 beleg: state.formData.beleg,
                 status: 'offen',
                 eingereichtAm: new Date().toISOString(),
-                bezahltAm: null
+                bezahltAm: null,
+                historie: [{
+                    zeitpunkt: new Date().toISOString(),
+                    aktion: 'Erstellt',
+                    benutzer: state.currentUser.name
+                }]
             };
 
             state.auslagen.push(neueAuslage);
@@ -267,6 +277,92 @@
             render();
         }
        
+        function openEditModal(id) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (!auslage) return;
+            
+            // Berechtigungsprüfung
+            if (state.currentUser.rolle === 'mitglied') {
+                if (auslage.mitglied !== state.currentUser.name || auslage.status !== 'offen') {
+                    state.toast = 'Nur eigene offene Auslagen können bearbeitet werden!';
+                    render();
+                    return;
+                }
+            }
+            
+            state.editModal = {
+                open: true,
+                auslage: auslage,
+                formData: {
+                    betrag: auslage.betrag,
+                    datum: auslage.datum,
+                    zweck: auslage.zweck,
+                    kategorie: auslage.kategorie
+                }
+            };
+            render();
+        }
+
+        function closeEditModal() {
+            state.editModal = { open: false, auslage: null, formData: {} };
+            render();
+        }
+
+        function saveEdit() {
+            const auslage = state.auslagen.find(a => a.id === state.editModal.auslage.id);
+            if (!auslage) return;
+            
+            const aenderungen = [];
+            if (parseFloat(state.editModal.formData.betrag) !== auslage.betrag) {
+                aenderungen.push({
+                    feld: 'Betrag',
+                    alt: auslage.betrag.toFixed(2) + ' €',
+                    neu: parseFloat(state.editModal.formData.betrag).toFixed(2) + ' €'
+                });
+                auslage.betrag = parseFloat(state.editModal.formData.betrag);
+            }
+            if (state.editModal.formData.datum !== auslage.datum) {
+                aenderungen.push({
+                    feld: 'Datum',
+                    alt: auslage.datum,
+                    neu: state.editModal.formData.datum
+                });
+                auslage.datum = state.editModal.formData.datum;
+            }
+            if (state.editModal.formData.zweck !== auslage.zweck) {
+                aenderungen.push({
+                    feld: 'Zweck',
+                    alt: auslage.zweck,
+                    neu: state.editModal.formData.zweck
+                });
+                auslage.zweck = state.editModal.formData.zweck;
+            }
+            if (state.editModal.formData.kategorie !== auslage.kategorie) {
+                aenderungen.push({
+                    feld: 'Kategorie',
+                    alt: auslage.kategorie,
+                    neu: state.editModal.formData.kategorie
+                });
+                auslage.kategorie = state.editModal.formData.kategorie;
+            }
+            
+            if (aenderungen.length > 0) {
+                if (!auslage.historie) auslage.historie = [];
+                auslage.historie.push({
+                    zeitpunkt: new Date().toISOString(),
+                    aktion: 'Bearbeitet',
+                    benutzer: state.currentUser.name,
+                    aenderungen: aenderungen
+                });
+                saveData();
+                state.toast = 'Änderungen erfolgreich gespeichert!';
+            } else {
+                state.toast = 'Keine Änderungen vorgenommen.';
+            }
+            
+            closeEditModal();
+        }
+
         function renderBelegOverlay() {
             if (!state.belegOverlay) return '';
             const a = state.belegOverlay;
@@ -316,29 +412,152 @@
                         />
                     </div>
 
-                    <div class="p-5 border-t border-gray-100 flex-shrink-0 flex gap-3">
-                        <button 
-                            onclick="closeBelegOverlay()"
-                            class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
-                        >
-                            Schließen
-                        </button>
-                        ${a.status === 'offen' ? `
+                    <div class="p-5 border-t border-gray-100 flex-shrink-0">
+                        <div class="flex gap-3 mb-3">
+                            ${a.status === 'offen' ? `
+                                <button 
+                                    onclick="updateStatus(${a.id}, 'geprüft'); closeBelegOverlay();"
+                                    class="flex-1 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold transition"
+                                >
+                                    👀 Prüfen
+                                </button>
+                            ` : ''}
+                            ${a.status === 'geprüft' ? `
+                                <button 
+                                    onclick="updateStatus(${a.id}, 'bezahlt'); closeBelegOverlay();"
+                                    class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition"
+                                >
+                                    💰 Bezahlen
+                                </button>
+                            ` : ''}
+                        </div>
+                        <div class="flex gap-3">
                             <button 
-                                onclick="updateStatus(${a.id}, 'geprüft'); closeBelegOverlay();"
-                                class="flex-1 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold transition"
+                                onclick="openEditModal(${a.id}); closeBelegOverlay();"
+                                class="flex-1 py-3 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-semibold transition"
                             >
-                                👀 Prüfen
+                                ✏️ Bearbeiten
                             </button>
-                        ` : ''}
-                        ${a.status === 'geprüft' ? `
                             <button 
-                                onclick="updateStatus(${a.id}, 'bezahlt'); closeBelegOverlay();"
-                                class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition"
+                                onclick="closeBelegOverlay()"
+                                class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
                             >
-                                💰 Bezahlen
+                                Schließen
                             </button>
-                        ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEditModal() {
+            if (!state.editModal.open) return '';
+            const a = state.editModal.auslage;
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeEditModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Auslage bearbeiten</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${a.mitglied} • ${a.status}</p>
+                            </div>
+                            <button onclick="closeEditModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Betrag (€) *</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    required
+                                    value="${state.editModal.formData.betrag}"
+                                    oninput="state.editModal.formData.betrag = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Datum *</label>
+                                <input
+                                    type="date"
+                                    required
+                                    value="${state.editModal.formData.datum}"
+                                    oninput="state.editModal.formData.datum = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
+                                <select
+                                    onchange="state.editModal.formData.kategorie = this.value; render();"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                >
+                                    <option ${state.editModal.formData.kategorie === 'Kostüme' ? 'selected' : ''}>Kostüme</option>
+                                    <option ${state.editModal.formData.kategorie === 'Dekoration' ? 'selected' : ''}>Dekoration</option>
+                                    <option ${state.editModal.formData.kategorie === 'Verpflegung' ? 'selected' : ''}>Verpflegung</option>
+                                    <option ${state.editModal.formData.kategorie === 'Transport' ? 'selected' : ''}>Transport</option>
+                                    <option ${state.editModal.formData.kategorie === 'Musik/Technik' ? 'selected' : ''}>Musik/Technik</option>
+                                    <option ${state.editModal.formData.kategorie === 'Sonstiges' ? 'selected' : ''}>Sonstiges</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Zweck / Beschreibung *</label>
+                                <textarea
+                                    required
+                                    oninput="state.editModal.formData.zweck = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    rows="3"
+                                >${state.editModal.formData.zweck}</textarea>
+                            </div>
+
+                            ${a.historie && a.historie.length > 1 ? `
+                                <div class="border-t pt-4 mt-6">
+                                    <h3 class="text-sm font-semibold text-gray-700 mb-3">📜 Änderungshistorie</h3>
+                                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                                        ${a.historie.slice().reverse().map(h => `
+                                            <div class="text-xs bg-gray-50 p-3 rounded">
+                                                <div class="flex justify-between items-start mb-1">
+                                                    <span class="font-semibold text-gray-700">${h.aktion}</span>
+                                                    <span class="text-gray-400">${new Date(h.zeitpunkt).toLocaleString('de-DE')}</span>
+                                                </div>
+                                                <p class="text-gray-500">von ${h.benutzer}</p>
+                                                ${h.aenderungen ? `
+                                                    <div class="mt-2 space-y-1">
+                                                        ${h.aenderungen.map(aen => `
+                                                            <div class="text-gray-600">
+                                                                <strong>${aen.feld}:</strong> 
+                                                                <span class="line-through text-red-500">${aen.alt}</span> 
+                                                                → <span class="text-green-600">${aen.neu}</span>
+                                                            </div>
+                                                        `).join('')}
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl flex gap-3">
+                            <button 
+                                onclick="closeEditModal()"
+                                class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                            >
+                                Abbrechen
+                            </button>
+                            <button 
+                                onclick="saveEdit()"
+                                class="flex-1 py-3 rounded-lg bg-verein-pink hover:bg-verein-pink-dark text-white font-semibold transition"
+                            >
+                                ✓ Änderungen speichern
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -735,12 +954,20 @@
                                                     />
                                                 ` : ''}
                                                 ${auslage.status === 'offen' ? `
-                                                    <button
-                                                        onclick="deleteAuslage(${auslage.id})"
-                                                        class="mt-3 px-3 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200 transition"
-                                                    >
-                                                        🗑️ Löschen
-                                                    </button>
+                                                    <div class="mt-3 flex gap-2">
+                                                        <button
+                                                            onclick="openEditModal(${auslage.id})"
+                                                            class="px-3 py-1 bg-blue-100 text-blue-600 text-xs rounded hover:bg-blue-200 transition"
+                                                        >
+                                                            ✏️ Bearbeiten
+                                                        </button>
+                                                        <button
+                                                            onclick="deleteAuslage(${auslage.id})"
+                                                            class="px-3 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200 transition"
+                                                        >
+                                                            🗑️ Löschen
+                                                        </button>
+                                                    </div>
                                                 ` : ''}
                                             </div>
                                         `).join('')}
@@ -994,6 +1221,13 @@
                                                                     </button>
                                                                 ` : ''}
                                                                 <button
+                                                                    onclick="openEditModal(${auslage.id})"
+                                                                    class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded hover:bg-yellow-200"
+                                                                    title="Auslage bearbeiten"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                                <button
                                                                     onclick="deleteAuslage(${auslage.id})"
                                                                     class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200"
                                                                     title="Auslage löschen"
@@ -1021,11 +1255,11 @@
             if (!state.currentUser) {
                 app.innerHTML = renderLogin() + renderToast();
             } else if (state.view === 'neue-auslage') {
-                app.innerHTML = renderNeueAuslage() + renderBelegOverlay() + renderToast();
+                app.innerHTML = renderNeueAuslage() + renderEditModal() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'meine-auslagen') {
-                app.innerHTML = renderMeineAuslagen() + renderBelegOverlay() + renderToast();
+                app.innerHTML = renderMeineAuslagen() + renderEditModal() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'dashboard') {
-                app.innerHTML = renderDashboard() + renderModal() + renderBelegOverlay() + renderToast();
+                app.innerHTML = renderDashboard() + renderModal() + renderEditModal() + renderBelegOverlay() + renderToast();
             }
         }
         // Initialize App

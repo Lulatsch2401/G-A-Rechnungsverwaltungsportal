@@ -1,7 +1,5 @@
-- Gesamten Kassenstand anzeigen
-- Code cleanen und klären ob das überhaupt Sinn ergibt
-- Filter und summarizes für das Dashboard, um herauszufinden wie viel einzelne Personen bekommen/zahlen müssen
-- Löschen
+- Einträge bearbeiten Kassenwart nur Kateggorien, außerdem die Möglich dass der die Kategorien selbst pflegen kann und Kosstenübersichtemn als PDFs und Tabellen erstellen
+
 
 Für später
 - Usernamen wie lfucke - mit oder ohne Passwort?
