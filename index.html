@@ -88,6 +88,14 @@
                 open: false,
                 neueKategorie: ''
             },
+            reportModal: {
+                open: false,
+                typ: 'kategorie',
+                vonDatum: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+                bisDatum: new Date().toISOString().split('T')[0],
+                data: null,
+                expandedRow: null
+            },
             modal: {
                     open: false,
                     mitglied: null,
@@ -169,7 +177,178 @@
             render();
         }
 
- 
+ // Report-Funktionen
+        function openReportModal() {
+            state.reportModal.open = true;
+            generateReport();
+        }
+
+        function closeReportModal() {
+            state.reportModal = {
+                open: false,
+                typ: 'kategorie',
+                vonDatum: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+                bisDatum: new Date().toISOString().split('T')[0],
+                data: null
+            };
+            render();
+        }
+
+        function generateReport() {
+            const von = new Date(state.reportModal.vonDatum);
+            const bis = new Date(state.reportModal.bisDatum);
+            bis.setHours(23, 59, 59);
+            
+            // Alle Auslagen im Zeitraum, unabhängig vom Status
+            const filtered = state.auslagen.filter(a => {
+                const datum = new Date(a.datum);
+                return datum >= von && datum <= bis;
+            });
+
+            let data = [];
+            
+            if (state.reportModal.typ === 'kategorie') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.kategorie]) acc[a.kategorie] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.kategorie].summe += a.betrag;
+                    acc[a.kategorie].anzahl++;
+                    acc[a.kategorie].auslagen.push(a);
+                    return acc;
+                }, {});
+                
+                data = Object.entries(grouped)
+                    .map(([kat, werte]) => ({
+                        key: kat,
+                        kategorie: kat,
+                        anzahl: werte.anzahl,
+                        summe: werte.summe,
+                        auslagen: werte.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum))
+                    }))
+                    .sort((a, b) => b.summe - a.summe);
+                    
+            } else if (state.reportModal.typ === 'mitglied') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.mitglied]) acc[a.mitglied] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.mitglied].summe += a.betrag;
+                    acc[a.mitglied].anzahl++;
+                    acc[a.mitglied].auslagen.push(a);
+                    return acc;
+                }, {});
+                
+                data = Object.entries(grouped)
+                    .map(([name, werte]) => ({
+                        key: name,
+                        mitglied: name,
+                        anzahl: werte.anzahl,
+                        summe: werte.summe,
+                        auslagen: werte.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum))
+                    }))
+                    .sort((a, b) => b.summe - a.summe);
+                    
+            } else if (state.reportModal.typ === 'monat') {
+                const grouped = filtered.reduce((acc, a) => {
+                    const monat = new Date(a.datum).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit' });
+                    if (!acc[monat]) acc[monat] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[monat].summe += a.betrag;
+                    acc[monat].anzahl++;
+                    acc[monat].auslagen.push(a);
+                    return acc;
+                }, {});
+                
+                data = Object.entries(grouped)
+                    .map(([monat, werte]) => ({
+                        key: monat,
+                        monat: monat,
+                        anzahl: werte.anzahl,
+                        summe: werte.summe,
+                        auslagen: werte.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum))
+                    }))
+                    .sort((a, b) => a.monat.localeCompare(b.monat));
+                    
+            } else if (state.reportModal.typ === 'status') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.status]) acc[a.status] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.status].summe += a.betrag;
+                    acc[a.status].anzahl++;
+                    acc[a.status].auslagen.push(a);
+                    return acc;
+                }, {});
+                
+                data = Object.entries(grouped).map(([status, werte]) => ({
+                    key: status,
+                    status: status,
+                    anzahl: werte.anzahl,
+                    summe: werte.summe,
+                    auslagen: werte.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum))
+                }));
+            }
+            
+            state.reportModal.data = data;
+            render();
+        }
+
+        function toggleReportRow(key) {
+            if (state.reportModal.expandedRow === key) {
+                state.reportModal.expandedRow = null;
+            } else {
+                state.reportModal.expandedRow = key;
+            }
+            render();
+        }
+
+
+
+        function exportReport() {
+            if (!state.reportModal.data || state.reportModal.data.length === 0) {
+                state.toast = 'Keine Daten zum Exportieren vorhanden!';
+                render();
+                return;
+            }
+            
+            let csv = '';
+            const typ = state.reportModal.typ;
+            
+            if (typ === 'kategorie') {
+                csv = [
+                    ['Kategorie', 'Anzahl Belege', 'Summe (EUR)'].join(';'),
+                    ...state.reportModal.data.map(d => [d.kategorie, d.anzahl, d.summe.toFixed(2)].join(';'))
+                ].join('\n');
+            } else if (typ === 'mitglied') {
+                csv = [
+                    ['Mitglied', 'Anzahl Belege', 'Summe (EUR)'].join(';'),
+                    ...state.reportModal.data.map(d => [d.mitglied, d.anzahl, d.summe.toFixed(2)].join(';'))
+                ].join('\n');
+            } else if (typ === 'monat') {
+                csv = [
+                    ['Monat', 'Anzahl Belege', 'Summe (EUR)'].join(';'),
+                    ...state.reportModal.data.map(d => [d.monat, d.anzahl, d.summe.toFixed(2)].join(';'))
+                ].join('\n');
+            } else if (typ === 'status') {
+                csv = [
+                    ['Status', 'Anzahl Belege', 'Summe (EUR)'].join(';'),
+                    ...state.reportModal.data.map(d => [d.status, d.anzahl, d.summe.toFixed(2)].join(';'))
+                ].join('\n');
+            }
+            
+            csv += '\n\n';
+            csv += `Zeitraum;${state.reportModal.vonDatum};bis;${state.reportModal.bisDatum}\n`;
+            csv += `Erstellt am;${new Date().toLocaleDateString('de-DE')};${new Date().toLocaleTimeString('de-DE')}`;
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const typeName = {
+                'kategorie': 'Kategorien',
+                'mitglied': 'Mitglieder',
+                'monat': 'Monate',
+                'status': 'Status'
+            }[typ];
+            link.download = `Report_${typeName}_${state.reportModal.vonDatum}_bis_${state.reportModal.bisDatum}.csv`;
+            link.click();
+            
+            state.toast = 'Report erfolgreich exportiert!';
+            render();
+        }
 
         // Login
         function handleLogin(name, rolle) {
@@ -328,7 +507,7 @@
 
         function openBelegModal(mitglied) {
             const belegeDesMitglieds = state.auslagen.filter(
-                a => a.mitglied === mitglied && (a.status === 'offen' || a.status === 'geprüft')
+                a => a.mitglied === mitglied && a.status === 'offen'
             );
             state.modal = {
                 open: true,
@@ -490,12 +669,9 @@
                             <span class="text-2xl font-bold text-verein-pink">${a.betrag.toFixed(2)} €</span>
                             <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
                                 a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
-                                a.status === 'geprüft' ? 'bg-verein-pink-light text-verein-pink' :
                                 'bg-green-100 text-green-700'
                             }">
-                                ${a.status === 'offen' ? '⏳ Offen' :
-                                  a.status === 'geprüft' ? '👀 Geprüft' :
-                                  '✅ Bezahlt'}
+                                ${a.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}
                             </span>
                         </div>
                         <div class="flex gap-4 mt-3 text-sm text-gray-500">
@@ -514,16 +690,8 @@
                     </div>
 
                     <div class="p-5 border-t border-gray-100 flex-shrink-0">
-                        <div class="flex gap-3 mb-3">
+                        <div class="flex gap-3">
                             ${a.status === 'offen' ? `
-                                <button 
-                                    onclick="updateStatus(${a.id}, 'geprüft'); closeBelegOverlay();"
-                                    class="flex-1 py-3 rounded-lg bg-blue-500 hover:bg-blue-600 text-white font-semibold transition"
-                                >
-                                    👀 Prüfen
-                                </button>
-                            ` : ''}
-                            ${a.status === 'geprüft' ? `
                                 <button 
                                     onclick="updateStatus(${a.id}, 'bezahlt'); closeBelegOverlay();"
                                     class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition"
@@ -531,8 +699,6 @@
                                     💰 Bezahlen
                                 </button>
                             ` : ''}
-                        </div>
-                        <div class="flex gap-3">
                             <button 
                                 onclick="openEditModal(${a.id}); closeBelegOverlay();"
                                 class="flex-1 py-3 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-semibold transition"
@@ -654,6 +820,172 @@
                                 class="flex-1 py-3 rounded-lg bg-verein-pink hover:bg-verein-pink-dark text-white font-semibold transition"
                             >
                                 ✓ Änderungen speichern
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+function renderReportModal() {
+            if (!state.reportModal.open) return '';
+            
+            const gesamtSumme = state.reportModal.data ? state.reportModal.data.reduce((sum, d) => sum + d.summe, 0) : 0;
+            const gesamtAnzahl = state.reportModal.data ? state.reportModal.data.reduce((sum, d) => sum + d.anzahl, 0) : 0;
+            
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeReportModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">📊 Auswertung erstellen</h2>
+                                <p class="text-cyan-200 text-sm mt-1">Kosten analysieren und exportieren</p>
+                            </div>
+                            <button onclick="closeReportModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+
+                        <div class="p-6 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Report-Typ</label>
+                                    <select
+                                        onchange="state.reportModal.typ = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    >
+                                        <option value="kategorie" ${state.reportModal.typ === 'kategorie' ? 'selected' : ''}>Nach Kategorie</option>
+                                        <option value="mitglied" ${state.reportModal.typ === 'mitglied' ? 'selected' : ''}>Nach Mitglied</option>
+                                        <option value="monat" ${state.reportModal.typ === 'monat' ? 'selected' : ''}>Nach Monat</option>
+                                        <option value="status" ${state.reportModal.typ === 'status' ? 'selected' : ''}>Nach Status</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Von Datum</label>
+                                    <input
+                                        type="date"
+                                        value="${state.reportModal.vonDatum}"
+                                        onchange="state.reportModal.vonDatum = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Bis Datum</label>
+                                    <input
+                                        type="date"
+                                        value="${state.reportModal.bisDatum}"
+                                        onchange="state.reportModal.bisDatum = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            ${state.reportModal.data && state.reportModal.data.length > 0 ? `
+                                <div class="border-t pt-4">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-lg font-bold text-gray-800">Vorschau</h3>
+                                        <div class="text-right">
+                                            <p class="text-sm text-gray-500">Gesamt</p>
+                                            <p class="text-xl font-bold text-verein-pink">${gesamtSumme.toFixed(2)} €</p>
+                                            <p class="text-xs text-gray-400">${gesamtAnzahl} Belege</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-8"></th>
+                                                    ${state.reportModal.typ === 'kategorie' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategorie</th>' : ''}
+                                                    ${state.reportModal.typ === 'mitglied' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>' : ''}
+                                                    ${state.reportModal.typ === 'monat' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Monat</th>' : ''}
+                                                    ${state.reportModal.typ === 'status' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>' : ''}
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Anzahl</th>
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Summe</th>
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Anteil</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                ${state.reportModal.data.map(d => {
+                                                    const anteil = (d.summe / gesamtSumme * 100).toFixed(1);
+                                                    const isExpanded = state.reportModal.expandedRow === d.key;
+                                                    return `
+                                                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="toggleReportRow('${d.key.replace(/'/g, "\\'")}')">
+                                                            <td class="px-4 py-3 text-sm text-center">
+                                                                <span class="text-gray-400">${isExpanded ? '▼' : '▶'}</span>
+                                                            </td>
+                                                            ${state.reportModal.typ === 'kategorie' ? `<td class="px-4 py-3 text-sm font-medium">${d.kategorie}</td>` : ''}
+                                                            ${state.reportModal.typ === 'mitglied' ? `<td class="px-4 py-3 text-sm font-medium">${d.mitglied}</td>` : ''}
+                                                            ${state.reportModal.typ === 'monat' ? `<td class="px-4 py-3 text-sm font-medium">${d.monat}</td>` : ''}
+                                                            ${state.reportModal.typ === 'status' ? `<td class="px-4 py-3 text-sm font-medium">${d.status}</td>` : ''}
+                                                            <td class="px-4 py-3 text-sm text-right">${d.anzahl}</td>
+                                                            <td class="px-4 py-3 text-sm text-right font-semibold">${d.summe.toFixed(2)} €</td>
+                                                            <td class="px-4 py-3 text-sm text-right">
+                                                                <div class="flex items-center justify-end gap-2">
+                                                                    <div class="w-16 bg-gray-200 rounded-full h-2">
+                                                                        <div class="bg-verein-pink h-2 rounded-full" style="width: ${anteil}%"></div>
+                                                                    </div>
+                                                                    <span class="text-gray-500">${anteil}%</span>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        ${isExpanded ? `
+                                                            <tr>
+                                                                <td colspan="7" class="px-0 py-0">
+                                                                    <div class="bg-gray-50 px-8 py-4">
+                                                                        <p class="text-xs font-semibold text-gray-500 uppercase mb-3">Einzelne Auslagen</p>
+                                                                        <div class="space-y-2">
+                                                                            ${d.auslagen.map(a => `
+                                                                                <div class="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-sm transition">
+                                                                                    <div class="flex justify-between items-start">
+                                                                                        <div class="flex-1">
+                                                                                            <p class="font-medium text-gray-800 text-sm">${a.zweck}</p>
+                                                                                            <div class="flex gap-3 mt-1 text-xs text-gray-500">
+                                                                                                <span>📅 ${a.datum}</span>
+                                                                                                <span>👤 ${a.mitglied}</span>
+                                                                                                <span class="px-2 py-0.5 rounded-full ${
+                                                                                                    a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
+                                                                                                    'bg-green-100 text-green-700'
+                                                                                                }">
+                                                                                                    ${a.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <p class="text-lg font-bold text-verein-pink ml-4">${a.betrag.toFixed(2)} €</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            `).join('')}
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ` : ''}
+                                                    `;
+                                                }).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="text-center py-12">
+                                    <p class="text-gray-400 text-lg">📊</p>
+                                    <p class="text-gray-500 mt-2">Keine Daten für diesen Zeitraum</p>
+                                </div>
+                            `}
+                        </div>
+
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl flex gap-3">
+                            <button 
+                                onclick="closeReportModal()"
+                                class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition"
+                            >
+                                Schließen
+                            </button>
+                            <button 
+                                onclick="exportReport()"
+                                class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition ${!state.reportModal.data || state.reportModal.data.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}"
+                                ${!state.reportModal.data || state.reportModal.data.length === 0 ? 'disabled' : ''}
+                            >
+                                📥 Als CSV exportieren
                             </button>
                         </div>
                     </div>
@@ -792,8 +1124,8 @@
                                                     <div>
                                                         <p class="font-semibold text-gray-800">${auslage.zweck}</p>
                                                         <p class="text-sm text-gray-500">${auslage.kategorie} • ${auslage.datum}</p>
-                                                        <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs ${auslage.status === 'geprüft' ? 'bg-blue-100 text-blue-700' : 'bg-cyan-100 text-verein-cyan'}">
-                                                            ${auslage.status === 'geprüft' ? '👀 Geprüft' : '⏳ Offen'}
+                                                        <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs bg-cyan-100 text-verein-cyan">
+                                                            ⏳ Offen
                                                         </span>
                                                     </div>
                                                     <p class="text-xl font-bold text-verein-pink ml-4">${auslage.betrag.toFixed(2)} €</p>
@@ -917,6 +1249,12 @@
                                     Dashboard
                                 </button>
                                 <button
+                                    onclick="openReportModal()"
+                                    class="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600"
+                                >
+                                    📊 Reports
+                                </button>
+                                <button
                                     onclick="openKategorienModal()"
                                     class="px-4 py-2 rounded bg-verein-cyan hover:bg-verein-cyan-dark"
                                 >
@@ -926,7 +1264,7 @@
                                     onclick="exportCSV()"
                                     class="px-4 py-2 rounded bg-green-500 hover:bg-green-600"
                                 >
-                                    📊 CSV Export
+                                    📥 Export
                                 </button>
                             ` : ''}
                             <button
@@ -1115,12 +1453,9 @@
                                                         <p class="text-2xl font-bold text-verein-pink">${auslage.betrag.toFixed(2)} €</p>
                                                         <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${
                                                             auslage.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' :
-                                                            auslage.status === 'geprüft' ? 'bg-verein-pink-light text-verein-pink' :
                                                             'bg-green-100 text-green-700'
                                                         }">
-                                                            ${auslage.status === 'offen' ? '⏳ Offen' :
-                                                              auslage.status === 'geprüft' ? '👀 Geprüft' :
-                                                              '✅ Bezahlt'}
+                                                            ${auslage.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}
                                                         </span>
                                                     </div>
                                                 </div>
@@ -1161,15 +1496,13 @@
 
         function renderDashboard() {
             const offeneAuslagen = state.auslagen.filter(a => a.status === 'offen');
-            const gepruefteAuslagen = state.auslagen.filter(a => a.status === 'geprüft');
             const bezahlteAuslagen = state.auslagen.filter(a => a.status === 'bezahlt');
             
             const summeOffen = offeneAuslagen.reduce((sum, a) => sum + a.betrag, 0);
-            const summeGeprueft = gepruefteAuslagen.reduce((sum, a) => sum + a.betrag, 0);
             const summeBezahlt = bezahlteAuslagen.reduce((sum, a) => sum + a.betrag, 0);
             const KASSENBESTAND = 5000.00;
             const kassenbestandAktuell = KASSENBESTAND - summeBezahlt;
-            const kassenbestandNachAbzug = kassenbestandAktuell - summeOffen - summeGeprueft;
+            const kassenbestandNachAbzug = kassenbestandAktuell - summeOffen;
 
             return `
                 <div class="min-h-screen bg-gray-50">
@@ -1183,17 +1516,7 @@
                                         <p class="text-2xl font-bold text-verein-cyan">${summeOffen.toFixed(2)} €</p>
                                         <p class="text-gray-400 text-xs">${offeneAuslagen.length} Positionen</p>
                                     </div>
-                                    <div class="text-3xl">⚠️</div>
-                                </div>
-                            </div>
-                            <div class="bg-white rounded-lg shadow p-6">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-sm">Geprüft</p>
-                                        <p class="text-2xl font-bold text-blue-500">${summeGeprueft.toFixed(2)} €</p>
-                                        <p class="text-gray-400 text-xs">${gepruefteAuslagen.length} Positionen</p>
-                                    </div>
-                                    <div class="text-3xl">👀</div>
+                                    <div class="text-3xl">⏳</div>
                                 </div>
                             </div>
                             <div class="bg-white rounded-lg shadow p-6">
@@ -1241,7 +1564,7 @@
                                     <div>
                                         <p class="text-pink-100 text-sm">Kasse nach offenen Abzügen</p>
                                         <p class="text-3xl font-bold text-white">${kassenbestandNachAbzug.toFixed(2)} €</p>
-                                        <p class="text-pink-200 text-xs mt-1">Abzug: ${(summeOffen + summeGeprueft).toFixed(2)} €</p>
+                                        <p class="text-pink-200 text-xs mt-1">Abzug: ${summeOffen.toFixed(2)} €</p>
                                     </div>
                                     <div class="text-3xl">${kassenbestandNachAbzug < 0 ? '⚠️' : '✅'}</div>
                                 </div>
@@ -1252,11 +1575,10 @@
                             <div class="p-6">
                                 <h2 class="text-xl font-bold text-gray-800 mb-4">💸 Auszahlungen je Mitglied</h2>
                                 ${(() => {
-                                    const zuBezahlen = state.auslagen.filter(a => a.status === 'offen' || a.status === 'geprüft');
+                                    const zuBezahlen = state.auslagen.filter(a => a.status === 'offen');
                                     const nachMitglied = zuBezahlen.reduce((acc, a) => {
-                                        if (!acc[a.mitglied]) acc[a.mitglied] = { offen: 0, geprueft: 0 };
-                                        if (a.status === 'offen') acc[a.mitglied].offen += a.betrag;
-                                        if (a.status === 'geprüft') acc[a.mitglied].geprueft += a.betrag;
+                                        if (!acc[a.mitglied]) acc[a.mitglied] = { summe: 0 };
+                                        acc[a.mitglied].summe += a.betrag;
                                         return acc;
                                     }, {});
                                     
@@ -1266,19 +1588,14 @@
                                     
                                     return '<div class="overflow-x-auto"><table class="w-full"><thead class="bg-gray-50"><tr>' +
                                         '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>' +
-                                        '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Offen</th>' +
-                                        '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Geprüft</th>' +
-                                        '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Gesamt auszuzahlen</th>' +
+                                        '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Auszuzahlen</th>' +
                                         '</tr></thead><tbody class="divide-y divide-gray-200">' +
                                         Object.entries(nachMitglied)
-                                            .sort((a, b) => (b[1].offen + b[1].geprueft) - (a[1].offen + a[1].geprueft))
+                                            .sort((a, b) => b[1].summe - a[1].summe)
                                             .map(([name, betraege]) => {
-                                                const gesamt = betraege.offen + betraege.geprueft;
                                                 return `<tr class="hover:bg-gray-50 cursor-pointer" onclick="openBelegModal('${name}')">
                                                     <td class="px-4 py-3 text-sm font-medium">${name}</td>
-                                                    <td class="px-4 py-3 text-sm text-right text-verein-cyan">${betraege.offen.toFixed(2)} €</td>
-                                                    <td class="px-4 py-3 text-sm text-right text-blue-500">${betraege.geprueft.toFixed(2)} €</td>
-                                                    <td class="px-4 py-3 text-sm text-right font-bold text-verein-pink">${gesamt.toFixed(2)} €</td>
+                                                    <td class="px-4 py-3 text-sm text-right font-bold text-verein-pink">${betraege.summe.toFixed(2)} €</td>
                                                 </tr>`;
                                             }).join('') +
                                         '</tbody></table></div>';
@@ -1305,7 +1622,6 @@
                                     >
                                         <option value="" ${state.filter.status === '' ? 'selected' : ''}>Alle Status</option>
                                         <option value="offen" ${state.filter.status === 'offen' ? 'selected' : ''}>⏳ Offen</option>
-                                        <option value="geprüft" ${state.filter.status === 'geprüft' ? 'selected' : ''}>👀 Geprüft</option>
                                         <option value="bezahlt" ${state.filter.status === 'bezahlt' ? 'selected' : ''}>✅ Bezahlt</option>
                                     </select>
                                     <select
@@ -1381,15 +1697,6 @@
                                                             <div class="flex gap-1 justify-center flex-wrap">
                                                                 ${auslage.status === 'offen' ? `
                                                                     <button
-                                                                        onclick="updateStatus(${auslage.id}, 'geprüft')"
-                                                                        class="px-2 py-1 bg-blue-500 text-white text-xs rounded hover:bg-blue-600"
-                                                                        title="Als geprüft markieren"
-                                                                    >
-                                                                        ✓ Prüfen
-                                                                    </button>
-                                                                ` : ''}
-                                                                ${(auslage.status === 'offen' || auslage.status === 'geprüft') ? `
-                                                                    <button
                                                                         onclick="updateStatus(${auslage.id}, 'bezahlt')"
                                                                         class="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600"
                                                                         title="Als bezahlt markieren"
@@ -1440,7 +1747,7 @@
             } else if (state.view === 'meine-auslagen') {
                 app.innerHTML = renderMeineAuslagen() + renderEditModal() + renderBelegOverlay() + renderToast();
             } else if (state.view === 'dashboard') {
-                app.innerHTML = renderDashboard() + renderModal() + renderKategorienModal() + renderEditModal() + renderBelegOverlay() + renderToast();
+                app.innerHTML = renderDashboard() + renderModal() + renderReportModal() + renderKategorienModal() + renderEditModal() + renderBelegOverlay() + renderToast();
             }
             
             // Scroll-Position und Fokus wiederherstellen

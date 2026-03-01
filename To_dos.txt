@@ -1,9 +1,6 @@
-- Möglich dass der die Kategorien selbst pflegen kann und Kosstenübersichtemn als PDFs und Tabellen erstellen
-- Filter anpassen springt immmer beim Eintragen von Namen
-- Geprüft entfernen 
 - Tipp beim Einloggen Anpassen durch einen Hinweis wie man sich anmelden kann mit dem Nutzernamen +
 - Einlogg Maske anpassne neuer workflow - Beim eintragen des Namens das validieren und dann Passwort abfrage für Kassenwart
-
+- erstellen von Rechnungen für die anderen Mitglieder als Kassenwart
 
 Für später
 - Usernamen wie lfucke - ohne Passwort nur Passwort für Kassenwart
