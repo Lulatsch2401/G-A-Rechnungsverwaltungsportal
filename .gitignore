@@ -1,0 +1,5 @@
+node_modules/
+auslagen.db
+backups/
+*.log
+.env

@@ -1,0 +1,2253 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auslagen-Verwaltung - Gut und Aussehend</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" href="/logo.png" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        .bg-verein-darkblue { background-color: #0A1929; }
+        .bg-verein-pink { background-color: #E91E7E; }
+        .bg-verein-cyan { background-color: #4FD9D9; }
+        .text-verein-darkblue { color: #0A192F; }
+        .text-verein-pink { color: #E91E7E; }
+        .text-verein-cyan { color: #4FD9D9; }
+        .hover\:bg-verein-pink-dark:hover { background-color: #C2185B; }
+        .hover\:bg-verein-cyan-dark:hover { background-color: #26C6DA; }
+        .hover\:bg-verein-darkblue-dark:hover { background-color: #061A2B; }
+        .border-verein-pink { border-color: #E91E7E; }
+        .border-verein-cyan { border-color: #4FD9D9; }
+        .border-verein-darkblue { border-color: #0A1929; }
+        .bg-verein-pink-light { background-color: #FCE4EC; }
+        .bg-verein-cyan-light { background-color: #E0F7FA; }
+        .bg-gradient-verein {
+            background: linear-gradient(135deg, #0A1929 0%, #E91E7E 40%, #4FD9D9 100%);
+        }
+        .focus-verein\:ring-pink:focus { --tw-ring-color: #E91E7E; --tw-ring-offset-width: 2px; }
+        .focus-verein\:ring-cyan:focus { --tw-ring-color: #4FD9D9; --tw-ring-offset-width: 2px; }
+        @keyframes bounce-dot {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40% { transform: translateY(-8px); opacity: 1; }
+        }
+        .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px; }
+        .dot-1 { background: #E91E7E; animation: bounce-dot 1.2s ease-in-out infinite; }
+        .dot-2 { background: #4FD9D9; animation: bounce-dot 1.2s ease-in-out 0.2s infinite; }
+        .dot-3 { background: #0A1929; animation: bounce-dot 1.2s ease-in-out 0.4s infinite; }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="app"></div>
+
+    <script>
+
+        // App State
+        let state = {
+            currentUser: null,
+            view: 'login',
+            auslagen: [],
+            toast: null,
+            belegOverlay: null,
+            belegOverlayIdx: 0,
+            filter: { mitglied: '', status: '', kategorie: '' },
+            editModal: { open: false, auslage: null, formData: {} },
+            kategorien: [],
+            kategorienModal: { open: false, neueKategorie: '' },
+            reportModal: {
+                open: false,
+                typ: 'kategorie',
+                vonDatum: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+                bisDatum: new Date().toISOString().split('T')[0],
+                data: null,
+                expandedRow: null
+            },
+            modal: { open: false, mitglied: null, belegeDesMitglieds: [], ausgewaehlt: [] },
+            formData: {
+                betrag: '',
+                datum: new Date().toISOString().split('T')[0],
+                zweck: '',
+                kategorie: '',
+                belege: []
+            },
+            kassenbestand: 5000,
+            mitglieder: [],
+            kassensturz: { open: false, neuerStand: '', loading: false, error: '' },
+            einzahlungModal: { open: false, mitglied: '', betrag: '', datum: new Date().toISOString().split('T')[0], zweck: '', loading: false, error: '' },
+            einzahlungen: [],
+            panelModal: { open: false, typ: null },
+            nutzerModal: { open: false, nutzer: [], neuerUsername: '', neuerName: '', error: '', loading: false },
+            massenModal: { open: false, ausgewaehlt: [], betrag: '', datum: new Date().toISOString().split('T')[0], zweck: '', kategorie: '', loading: false, error: '' },
+            backupMenuOpen: false,
+            importModal: { open: false, rows: [], selected: [], loading: false, error: '' },
+            auslageModal: { open: false, mitglied: '', betrag: '', datum: new Date().toISOString().split('T')[0], zweck: '', kategorie: '', belege: [] },
+            loading: false
+        };
+
+        function formatBetrag(betrag, klasse = 'text-verein-pink') {
+            const neg = betrag < 0;
+            return `<span class="${neg ? 'text-red-500' : klasse} font-bold">${betrag.toFixed(2)} €</span>`;
+        }
+
+        // --- API Helpers ---
+        async function api(url, options = {}) {
+            const token = localStorage.getItem('authToken');
+            const res = await fetch(url, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                ...options
+            });
+            if (res.status === 401) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('authUser');
+                state.currentUser = null;
+                state.view = 'login';
+                render();
+                throw new Error('Sitzung abgelaufen');
+            }
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: 'Unbekannter Fehler' }));
+                throw new Error(err.error || 'Fehler');
+            }
+            return res.json();
+        }
+
+        async function loadData() {
+            if (!state.currentUser) {
+                const token = localStorage.getItem('authToken');
+                const userStr = localStorage.getItem('authUser');
+                if (token && userStr) {
+                    state.currentUser = JSON.parse(userStr);
+                } else {
+                    render();
+                    return;
+                }
+            }
+            try {
+                const isKw = state.currentUser && state.currentUser.rolle === 'kassenwart';
+                const requests = [
+                    api('/api/auslagen'),
+                    api('/api/kategorien'),
+                    api('/api/kassenbestand'),
+                    api('/api/mitglieder'),
+                    ...(isKw ? [api('/api/einzahlungen')] : [])
+                ];
+                const [auslagen, kategorien, kb, mitglieder, einzahlungen] = await Promise.all(requests);
+                state.auslagen = auslagen;
+                state.kategorien = kategorien;
+                state.kassenbestand = kb.kassenbestand;
+                state.mitglieder = mitglieder;
+                if (isKw) state.einzahlungen = einzahlungen || [];
+                if (!state.formData.kategorie && kategorien.length > 0) {
+                    state.formData.kategorie = kategorien[0];
+                }
+                if (state.currentUser.rolle === 'kassenwart') state.view = 'dashboard';
+                else state.view = 'meine-auslagen';
+            } catch (e) {
+                if (e.message !== 'Sitzung abgelaufen') state.toast = 'Fehler beim Laden: ' + e.message;
+            }
+            render();
+        }
+
+        // --- Debounce ---
+        let debounceTimer;
+        function debounceRender(delay = 300) {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => render(), delay);
+        }
+
+        // --- Kategorien ---
+        function openKategorienModal() {
+            state.kategorienModal = { open: true, neueKategorie: '' };
+            render();
+        }
+
+        function closeKategorienModal() {
+            state.kategorienModal = { open: false, neueKategorie: '' };
+            render();
+        }
+
+        async function addKategorie() {
+            const name = state.kategorienModal.neueKategorie.trim();
+            if (!name) { state.toast = 'Bitte einen Namen eingeben!'; render(); return; }
+            try {
+                await api('/api/kategorien', { method: 'POST', body: JSON.stringify({ name }) });
+                state.kategorienModal.neueKategorie = '';
+                state.toast = 'Kategorie erfolgreich hinzugefügt!';
+                await loadData();
+            } catch (e) {
+                state.toast = 'Diese Kategorie existiert bereits!';
+                render();
+            }
+        }
+
+        async function deleteKategorie(name) {
+            const inUse = state.auslagen.some(a => a.kategorie === name);
+            if (inUse) {
+                state.toast = 'Kategorie wird noch von Auslagen verwendet und kann nicht gelöscht werden!';
+                render();
+                return;
+            }
+            try {
+                await api('/api/kategorien/' + encodeURIComponent(name), { method: 'DELETE' });
+                state.toast = 'Kategorie erfolgreich gelöscht!';
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        // --- Reports ---
+        function openReportModal() {
+            state.reportModal.open = true;
+            generateReport();
+        }
+
+        function closeReportModal() {
+            state.reportModal = {
+                open: false,
+                typ: 'kategorie',
+                vonDatum: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0],
+                bisDatum: new Date().toISOString().split('T')[0],
+                data: null
+            };
+            render();
+        }
+
+        function generateReport() {
+            const von = new Date(state.reportModal.vonDatum);
+            const bis = new Date(state.reportModal.bisDatum);
+            bis.setHours(23, 59, 59);
+            const filtered = state.auslagen.filter(a => {
+                const datum = new Date(a.datum);
+                return datum >= von && datum <= bis;
+            });
+            let data = [];
+            if (state.reportModal.typ === 'kategorie') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.kategorie]) acc[a.kategorie] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.kategorie].summe += a.betrag;
+                    acc[a.kategorie].anzahl++;
+                    acc[a.kategorie].auslagen.push(a);
+                    return acc;
+                }, {});
+                data = Object.entries(grouped)
+                    .map(([kat, w]) => ({ key: kat, kategorie: kat, anzahl: w.anzahl, summe: w.summe, auslagen: w.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum)) }))
+                    .sort((a, b) => b.summe - a.summe);
+            } else if (state.reportModal.typ === 'mitglied') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.mitglied]) acc[a.mitglied] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.mitglied].summe += a.betrag;
+                    acc[a.mitglied].anzahl++;
+                    acc[a.mitglied].auslagen.push(a);
+                    return acc;
+                }, {});
+                data = Object.entries(grouped)
+                    .map(([name, w]) => ({ key: name, mitglied: name, anzahl: w.anzahl, summe: w.summe, auslagen: w.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum)) }))
+                    .sort((a, b) => b.summe - a.summe);
+            } else if (state.reportModal.typ === 'monat') {
+                const grouped = filtered.reduce((acc, a) => {
+                    const monat = new Date(a.datum).toLocaleDateString('de-DE', { year: 'numeric', month: '2-digit' });
+                    if (!acc[monat]) acc[monat] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[monat].summe += a.betrag;
+                    acc[monat].anzahl++;
+                    acc[monat].auslagen.push(a);
+                    return acc;
+                }, {});
+                data = Object.entries(grouped)
+                    .map(([monat, w]) => ({ key: monat, monat, anzahl: w.anzahl, summe: w.summe, auslagen: w.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum)) }))
+                    .sort((a, b) => a.monat.localeCompare(b.monat));
+            } else if (state.reportModal.typ === 'status') {
+                const grouped = filtered.reduce((acc, a) => {
+                    if (!acc[a.status]) acc[a.status] = { summe: 0, anzahl: 0, auslagen: [] };
+                    acc[a.status].summe += a.betrag;
+                    acc[a.status].anzahl++;
+                    acc[a.status].auslagen.push(a);
+                    return acc;
+                }, {});
+                data = Object.entries(grouped)
+                    .map(([status, w]) => ({ key: status, status, anzahl: w.anzahl, summe: w.summe, auslagen: w.auslagen.sort((a, b) => new Date(b.datum) - new Date(a.datum)) }));
+            }
+            state.reportModal.data = data;
+            render();
+        }
+
+        function toggleReportRow(key) {
+            state.reportModal.expandedRow = state.reportModal.expandedRow === key ? null : key;
+            render();
+        }
+
+        function exportReport() {
+            if (!state.reportModal.data || state.reportModal.data.length === 0) {
+                state.toast = 'Keine Daten zum Exportieren vorhanden!';
+                render();
+                return;
+            }
+            const typ = state.reportModal.typ;
+            const typNames = { kategorie: 'Kategorien', mitglied: 'Mitglieder', monat: 'Monate', status: 'Status' };
+            const headers = { kategorie: 'Kategorie', mitglied: 'Mitglied', monat: 'Monat', status: 'Status' };
+            let csv = [
+                [headers[typ], 'Anzahl Belege', 'Summe (EUR)'].join(';'),
+                ...state.reportModal.data.map(d => [d[typ], d.anzahl, d.summe.toFixed(2)].join(';'))
+            ].join('\n');
+            csv += `\n\nZeitraum;${state.reportModal.vonDatum};bis;${state.reportModal.bisDatum}\n`;
+            csv += `Erstellt am;${new Date().toLocaleDateString('de-DE')};${new Date().toLocaleTimeString('de-DE')}`;
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `Report_${typNames[typ]}_${state.reportModal.vonDatum}_bis_${state.reportModal.bisDatum}.csv`;
+            link.click();
+            state.toast = 'Report erfolgreich exportiert!';
+            render();
+        }
+
+        // --- Login / Logout ---
+        async function handleLogin() {
+            const usernameRaw = document.getElementById('loginName').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorEl = document.getElementById('loginError');
+            errorEl.textContent = '';
+            if (!usernameRaw) { errorEl.textContent = 'Bitte Benutzernamen eingeben.'; return; }
+            try {
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: usernameRaw, password })
+                });
+                const data = await res.json();
+                if (!res.ok) { errorEl.textContent = data.error || 'Anmeldung fehlgeschlagen'; return; }
+                localStorage.setItem('authToken', data.token);
+                localStorage.setItem('authUser', JSON.stringify({ name: data.name, rolle: data.rolle }));
+                state.currentUser = { name: data.name, rolle: data.rolle };
+                state.view = data.rolle === 'kassenwart' ? 'dashboard' : 'meine-auslagen';
+                await loadData();
+            } catch (e) {
+                errorEl.textContent = 'Verbindungsfehler';
+            }
+        }
+
+        function handleLoginKeypress(event) {
+            if (event.key === 'Enter') handleLogin();
+        }
+
+        async function handleLogout() {
+            const token = localStorage.getItem('authToken');
+            if (token) await fetch('/api/logout', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }).catch(() => {});
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('authUser');
+            state.currentUser = null;
+            state.view = 'login';
+            render();
+        }
+
+        // --- Beleg Helpers ---
+        function getBelege(beleg) {
+            if (!beleg) return [];
+            if (typeof beleg === 'string' && beleg.startsWith('[')) {
+                try { return JSON.parse(beleg); } catch {}
+            }
+            return typeof beleg === 'string' ? [beleg] : [];
+        }
+
+        function compressImage(base64, callback) {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+                const maxWidth = 800;
+                if (width > maxWidth) { height = (height * maxWidth) / width; width = maxWidth; }
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                callback(canvas.toDataURL('image/jpeg', 0.7));
+            };
+            img.src = base64;
+        }
+
+        // --- Beleg Upload (Neue Auslage) ---
+        function handleBelegUpload(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            let pending = files.length;
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    compressImage(reader.result, (compressed) => {
+                        state.formData.belege.push(compressed);
+                        if (--pending === 0) render();
+                    });
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = '';
+        }
+
+        function removeBeleg(index) {
+            state.formData.belege.splice(index, 1);
+            render();
+        }
+
+        // --- Auslage Submit ---
+        async function handleSubmit(event) {
+            event.preventDefault();
+            try {
+                await api('/api/auslagen', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        mitglied: state.currentUser.name,
+                        betrag: parseFloat(state.formData.betrag),
+                        datum: state.formData.datum,
+                        zweck: state.formData.zweck,
+                        kategorie: state.formData.kategorie,
+                        beleg: state.formData.belege.length > 0 ? JSON.stringify(state.formData.belege) : null
+                    })
+                });
+                state.formData = { betrag: '', datum: new Date().toISOString().split('T')[0], zweck: '', kategorie: state.kategorien[0] || '', belege: [] };
+                state.view = 'meine-auslagen';
+                state.toast = 'Auslage erfolgreich eingereicht!';
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        // --- Status Update ---
+        async function updateStatus(id, newStatus) {
+            try {
+                await api('/api/auslagen/' + id + '/status', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: newStatus })
+                });
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        // --- Beleg Overlay ---
+        function viewBeleg(id, idx = 0) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (auslage && getBelege(auslage.beleg).length > 0) {
+                state.belegOverlay = auslage;
+                state.belegOverlayIdx = idx;
+                render();
+            }
+        }
+
+        function closeBelegOverlay() {
+            state.belegOverlay = null;
+            render();
+        }
+
+        // --- CSV Export ---
+        function exportCSV() {
+            const csv = '﻿' + [
+                'Datum;Mitglied;Kategorie;Zweck;Betrag (EUR);Status;Eingereicht am;Bezahlt am',
+                ...state.auslagen.map(a => [
+                    a.datum, a.mitglied, a.kategorie,
+                    `"${(a.zweck || '').replace(/"/g, '""')}"`,
+                    parseFloat(a.betrag).toFixed(2), a.status,
+                    new Date(a.eingereichtAm).toLocaleDateString('de-DE'),
+                    a.bezahltAm ? new Date(a.bezahltAm).toLocaleDateString('de-DE') : ''
+                ].join(';'))
+            ].join('\r\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'auslagen_export_' + new Date().toISOString().split('T')[0] + '.csv';
+            link.click();
+        }
+
+        async function exportToGDrive() {
+            state.loading = true;
+            render();
+            try {
+                const result = await api('/api/auslagen/export-gdrive', { method: 'POST' });
+                state.toast = 'Exportiert nach Google Drive: ' + result.datei;
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+            }
+            state.loading = false;
+            render();
+        }
+
+        // --- Kassensturz ---
+        function openKassensturz() {
+            state.kassensturz = { open: true, neuerStand: '', loading: false, error: '' };
+            render();
+        }
+
+        function closeKassensturz() {
+            state.kassensturz.open = false;
+            render();
+        }
+
+        async function handleKassensturz() {
+            const neuerStand = parseFloat(document.getElementById('kassensturzStand').value.replace(',', '.'));
+            if (isNaN(neuerStand) || neuerStand < 0) {
+                state.kassensturz.error = 'Bitte einen gültigen Betrag eingeben.';
+                render();
+                return;
+            }
+            const offene = state.auslagen.filter(a => !a.geloescht && a.status === 'offen');
+            if (offene.length > 0) {
+                const summe = offene.reduce((s, a) => s + a.betrag, 0).toFixed(2);
+                const ok = confirm(
+                    `⚠️ Achtung: Es gibt noch ${offene.length} offene Auslage(n) über ${summe} €!\n\n` +
+                    `Beim Kassensturz werden ALLE Einträge unwiderruflich gelöscht – auch diese offenen Auslagen.\n\n` +
+                    `Kassensturz trotzdem durchführen?`
+                );
+                if (!ok) return;
+            }
+            state.kassensturz.loading = true;
+            state.kassensturz.error = '';
+            render();
+            try {
+                const result = await api('/api/kassensturz', {
+                    method: 'POST',
+                    body: JSON.stringify({ neuerKassenstand: neuerStand })
+                });
+                state.kassensturz.open = false;
+                await loadData();
+                state.toast = 'Kassensturz abgeschlossen. Datei: ' + result.datei + (result.rcloneOk ? ' ✓ Google Drive' : ' (GDrive-Upload fehlgeschlagen)');
+            } catch (e) {
+                state.kassensturz.loading = false;
+                state.kassensturz.error = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        // --- Einzahlung ---
+        function openEinzahlungModal() {
+            state.backupMenuOpen = false;
+            state.einzahlungModal = {
+                open: true, mitglied: state.mitglieder[0] || '',
+                betrag: '', datum: new Date().toISOString().split('T')[0],
+                zweck: '', loading: false, error: ''
+            };
+            render();
+        }
+
+        async function handleEinzahlung(event) {
+            event.preventDefault();
+            const m = state.einzahlungModal;
+            const betrag = parseFloat(m.betrag);
+            if (isNaN(betrag) || betrag <= 0) {
+                state.einzahlungModal.error = 'Betrag muss größer als 0 sein.';
+                render();
+                return;
+            }
+            state.einzahlungModal.loading = true;
+            state.einzahlungModal.error = '';
+            render();
+            try {
+                await api('/api/einzahlungen', {
+                    method: 'POST',
+                    body: JSON.stringify({ mitglied: m.mitglied, betrag, datum: m.datum, zweck: m.zweck })
+                });
+                state.einzahlungModal.open = false;
+                state.toast = `✅ Einzahlung von ${m.mitglied} (${betrag.toFixed(2)} €) erfasst.`;
+                await loadData();
+            } catch (e) {
+                state.einzahlungModal.loading = false;
+                state.einzahlungModal.error = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        function renderEinzahlungModal() {
+            if (!state.einzahlungModal.open) return '';
+            const m = state.einzahlungModal;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h2 class="text-xl font-bold text-gray-800">💵 Einzahlung erfassen</h2>
+                            <button onclick="state.einzahlungModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <form onsubmit="handleEinzahlung(event)" class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Mitglied *</label>
+                                <select onchange="state.einzahlungModal.mitglied = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                    ${state.mitglieder.map(n => `<option ${m.mitglied === n ? 'selected' : ''}>${n}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Betrag (€) *</label>
+                                    <input type="number" step="0.01" min="0.01" required value="${m.betrag}"
+                                        oninput="state.einzahlungModal.betrag = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        placeholder="z.B. 50.00" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Datum *</label>
+                                    <input type="date" required value="${m.datum}"
+                                        oninput="state.einzahlungModal.datum = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Zweck *</label>
+                                <input type="text" required value="${m.zweck}"
+                                    oninput="state.einzahlungModal.zweck = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    placeholder="z.B. Jahresbeitrag 2026" />
+                            </div>
+                            ${m.error ? `<p class="text-red-600 text-sm">${m.error}</p>` : ''}
+                            <div class="flex gap-3 pt-2">
+                                <button type="button" onclick="state.einzahlungModal.open = false; render();"
+                                    class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50">
+                                    Abbrechen
+                                </button>
+                                <button type="submit" ${m.loading ? 'disabled' : ''}
+                                    class="flex-1 py-3 rounded-lg bg-green-500 text-white font-semibold hover:bg-green-600 disabled:opacity-50">
+                                    ${m.loading ? 'Wird gespeichert…' : '💵 Einzahlung buchen'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+        }
+
+        // --- Massenerfassung ---
+        function openMassenModal() {
+            state.massenModal = {
+                open: true,
+                ausgewaehlt: [...state.mitglieder],
+                betrag: '',
+                datum: new Date().toISOString().split('T')[0],
+                zweck: '',
+                kategorie: state.kategorien[0] || '',
+                loading: false,
+                error: ''
+            };
+            render();
+        }
+
+        function toggleMassenMitglied(name, cb) {
+            const idx = state.massenModal.ausgewaehlt.indexOf(name);
+            if (idx === -1) state.massenModal.ausgewaehlt.push(name);
+            else state.massenModal.ausgewaehlt.splice(idx, 1);
+            if (cb) cb.closest('label').classList.toggle('bg-verein-pink-light', idx === -1);
+            updateMassenUI();
+        }
+
+        function toggleAlleMassen() {
+            const selectAll = state.massenModal.ausgewaehlt.length !== state.mitglieder.length;
+            state.massenModal.ausgewaehlt = selectAll ? [...state.mitglieder] : [];
+            document.querySelectorAll('.massen-cb').forEach(cb => {
+                cb.checked = selectAll;
+                cb.closest('label').classList.toggle('bg-verein-pink-light', selectAll);
+            });
+            updateMassenUI();
+        }
+
+        function negWarn(input, id) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = parseFloat(input.value) < 0 ? 'flex' : 'none';
+        }
+
+        function updateMassenUI() {
+            const count = state.massenModal.ausgewaehlt.length;
+            const total = state.mitglieder.length;
+            const countEl = document.getElementById('massen-count');
+            const btnEl = document.getElementById('massen-submit-btn');
+            const toggleEl = document.getElementById('massen-toggle-btn');
+            if (countEl) countEl.textContent = `${count} von ${total} Mitgliedern ausgewählt`;
+            if (btnEl) btnEl.textContent = `Für ${count} Mitglieder erfassen`;
+            if (toggleEl) toggleEl.textContent = count === total ? 'Auswahl aufheben' : 'Alle auswählen';
+        }
+
+        async function handleMassenerfassung(event) {
+            event.preventDefault();
+            const m = state.massenModal;
+            if (!m.ausgewaehlt.length) { state.massenModal.error = 'Bitte mindestens ein Mitglied auswählen.'; render(); return; }
+            if (m.betrag === '' || isNaN(parseFloat(m.betrag))) { state.massenModal.error = 'Bitte einen gültigen Betrag eingeben.'; render(); return; }
+            state.massenModal.loading = true;
+            state.massenModal.error = '';
+            render();
+            try {
+                const result = await api('/api/auslagen/massen', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        mitglieder: m.ausgewaehlt,
+                        betrag: parseFloat(m.betrag),
+                        datum: m.datum,
+                        zweck: m.zweck,
+                        kategorie: m.kategorie
+                    })
+                });
+                state.massenModal.open = false;
+                state.toast = `${result.inserted} Auslagen erfolgreich erfasst.`;
+                await loadData();
+            } catch (e) {
+                state.massenModal.loading = false;
+                state.massenModal.error = e.message;
+                render();
+            }
+        }
+
+        function renderMassenModal() {
+            if (!state.massenModal.open) return '';
+            const m = state.massenModal;
+            const alleAusgewaehlt = m.ausgewaehlt.length === state.mitglieder.length;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h2 class="text-xl font-bold text-gray-800">📋 Massenerfassung</h2>
+                            <button onclick="state.massenModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <form onsubmit="handleMassenerfassung(event)" class="flex flex-col flex-1 overflow-hidden">
+                            <div class="p-6 space-y-4 border-b border-gray-100">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Betrag (€) *</label>
+                                        <input type="number" step="0.01" required value="${m.betrag}"
+                                            oninput="state.massenModal.betrag = this.value; negWarn(this, 'neg-warn-massen')"
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                            placeholder="z.B. 25.00 oder -50.00" />
+                                        <div id="neg-warn-massen" style="display:${parseFloat(m.betrag) < 0 ? 'flex' : 'none'}" class="mt-1 items-center gap-1 text-amber-600 text-sm font-medium">
+                                            ⚠️ Negativer Betrag erkannt – bist du wirklich sicher?
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 mb-1">Datum *</label>
+                                        <input type="date" required value="${m.datum}"
+                                            oninput="state.massenModal.datum = this.value"
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label>
+                                    <select onchange="state.massenModal.kategorie = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                        ${state.kategorien.map(k => `<option ${m.kategorie === k ? 'selected' : ''}>${k}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">Zweck / Beschreibung *</label>
+                                    <input type="text" required value="${m.zweck}"
+                                        oninput="state.massenModal.zweck = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        placeholder="z.B. Jahresbeitrag 2026" />
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between px-6 py-3 border-b border-gray-100 bg-gray-50">
+                                <span id="massen-count" class="text-sm text-gray-600 font-medium">${m.ausgewaehlt.length} von ${state.mitglieder.length} Mitgliedern ausgewählt</span>
+                                <button type="button" id="massen-toggle-btn" onclick="toggleAlleMassen()"
+                                    class="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-white">
+                                    ${alleAusgewaehlt ? 'Auswahl aufheben' : 'Alle auswählen'}
+                                </button>
+                            </div>
+                            <div class="overflow-y-auto flex-1 p-4">
+                                <div class="grid grid-cols-2 gap-1">
+                                    ${state.mitglieder.map(name => {
+                                        const checked = m.ausgewaehlt.includes(name);
+                                        const escaped = name.replace(/'/g, "\\'");
+                                        return `
+                                        <label class="flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer select-none ${checked ? 'bg-verein-pink-light' : 'hover:bg-gray-50'}">
+                                            <input type="checkbox" ${checked ? 'checked' : ''}
+                                                onchange="toggleMassenMitglied('${escaped}', this)"
+                                                class="massen-cb accent-verein-pink shrink-0" />
+                                            <span class="text-sm text-gray-800 truncate">${name}</span>
+                                        </label>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            ${m.error ? `<p class="px-6 py-2 text-red-600 text-sm">${m.error}</p>` : ''}
+                            <div class="p-4 border-t border-gray-200 flex gap-3">
+                                <button type="button" onclick="state.massenModal.open = false; render();"
+                                    class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50">
+                                    Abbrechen
+                                </button>
+                                <button id="massen-submit-btn" type="submit" ${m.loading ? 'disabled' : ''}
+                                    class="flex-1 py-3 rounded-lg bg-verein-pink text-white font-semibold hover:bg-verein-pink-dark disabled:opacity-50">
+                                    ${m.loading ? 'Wird erfasst…' : `Für ${m.ausgewaehlt.length} Mitglieder erfassen`}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+        }
+
+        // --- Nutzerverwaltung ---
+        async function openNutzerModal() {
+            state.nutzerModal = { open: true, nutzer: [], neuerUsername: '', neuerName: '', error: '', loading: true };
+            render();
+            try {
+                const nutzer = await api('/api/mitglieder/admin');
+                state.nutzerModal.nutzer = nutzer;
+            } catch (e) {
+                state.nutzerModal.error = e.message;
+            }
+            state.nutzerModal.loading = false;
+            render();
+        }
+
+        async function handleToggleSperren(username, gesperrt) {
+            try {
+                await api(`/api/mitglieder/${username}/sperren`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ gesperrt })
+                });
+                const idx = state.nutzerModal.nutzer.findIndex(n => n.username === username);
+                if (idx !== -1) state.nutzerModal.nutzer[idx].gesperrt = gesperrt ? 1 : 0;
+                render();
+            } catch (e) {
+                state.nutzerModal.error = e.message;
+                render();
+            }
+        }
+
+        async function handleDeleteNutzer(username, name) {
+            if (!confirm(`${name} wirklich löschen?`)) return;
+            try {
+                await api(`/api/mitglieder/${username}`, { method: 'DELETE' });
+                state.nutzerModal.nutzer = state.nutzerModal.nutzer.filter(n => n.username !== username);
+                await loadData();
+                render();
+            } catch (e) {
+                state.nutzerModal.error = e.message;
+                render();
+            }
+        }
+
+        async function handleAddNutzer(event) {
+            event.preventDefault();
+            const { neuerUsername, neuerName } = state.nutzerModal;
+            if (!neuerUsername || !neuerName) return;
+            try {
+                await api('/api/mitglieder', {
+                    method: 'POST',
+                    body: JSON.stringify({ username: neuerUsername, name: neuerName })
+                });
+                state.nutzerModal.neuerUsername = '';
+                state.nutzerModal.neuerName = '';
+                state.nutzerModal.error = '';
+                const nutzer = await api('/api/mitglieder/admin');
+                state.nutzerModal.nutzer = nutzer;
+                await loadData();
+                render();
+            } catch (e) {
+                state.nutzerModal.error = e.message;
+                render();
+            }
+        }
+
+        function renderNutzerModal() {
+            if (!state.nutzerModal.open) return '';
+            const { nutzer, loading, error, neuerUsername, neuerName } = state.nutzerModal;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h2 class="text-xl font-bold text-gray-800">👥 Nutzerverwaltung</h2>
+                            <button onclick="state.nutzerModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="overflow-y-auto flex-1">
+                            ${loading ? `<div class="p-8 text-center text-gray-400">Lädt…</div>` : `
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 sticky top-0">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Username</th>
+                                        <th class="px-4 py-3 text-left font-semibold text-gray-600">Name</th>
+                                        <th class="px-4 py-3 text-center font-semibold text-gray-600">Status</th>
+                                        <th class="px-4 py-3 text-center font-semibold text-gray-600">Aktionen</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    ${nutzer.map(n => `
+                                    <tr class="hover:bg-gray-50 ${n.gesperrt ? 'opacity-50' : ''}">
+                                        <td class="px-4 py-3 font-mono text-xs text-gray-500">${n.username}</td>
+                                        <td class="px-4 py-3 font-medium">${n.name}</td>
+                                        <td class="px-4 py-3 text-center">
+                                            <span class="px-2 py-0.5 rounded-full text-xs font-medium ${n.gesperrt ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}">
+                                                ${n.gesperrt ? 'Gesperrt' : 'Aktiv'}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-center">
+                                            <div class="flex gap-1 justify-center">
+                                                <button onclick="handleToggleSperren('${n.username}', ${!n.gesperrt})"
+                                                    class="px-2 py-1 text-xs rounded ${n.gesperrt ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'}">
+                                                    ${n.gesperrt ? '✓ Entsperren' : '⊘ Sperren'}
+                                                </button>
+                                                <button onclick="handleDeleteNutzer('${n.username}', '${n.name}')"
+                                                    class="px-2 py-1 text-xs rounded bg-red-100 text-red-600 hover:bg-red-200">
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>`).join('')}
+                                </tbody>
+                            </table>`}
+                        </div>
+                        <div class="p-4 border-t border-gray-200">
+                            ${error ? `<p class="text-red-600 text-sm mb-3">${error}</p>` : ''}
+                            <form onsubmit="handleAddNutzer(event)" class="flex gap-2">
+                                <input type="text" placeholder="username (z.B. mmustern)"
+                                    value="${neuerUsername}"
+                                    oninput="state.nutzerModal.neuerUsername = this.value"
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none font-mono"
+                                    autocapitalize="none" />
+                                <input type="text" placeholder="Vollständiger Name"
+                                    value="${neuerName}"
+                                    oninput="state.nutzerModal.neuerName = this.value"
+                                    class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none" />
+                                <button type="submit"
+                                    class="px-4 py-2 bg-verein-pink text-white rounded-lg text-sm font-semibold hover:bg-verein-pink-dark">
+                                    + Hinzufügen
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Panel-Detail-Modal ---
+        function renderPanelModal() {
+            if (!state.panelModal.open) return '';
+            const typ = state.panelModal.typ;
+            const config = {
+                offen:   { titel: 'Offene Auslagen',   farbe: 'text-verein-cyan',  liste: state.auslagen.filter(a => !a.geloescht && a.status === 'offen') },
+                bezahlt: { titel: 'Bezahlte Auslagen', farbe: 'text-green-500',    liste: state.auslagen.filter(a => !a.geloescht && a.status === 'bezahlt') },
+                gesamt:  { titel: 'Alle Auslagen',     farbe: 'text-verein-pink',  liste: state.auslagen.filter(a => !a.geloescht) }
+            }[typ];
+            const summe = config.liste.reduce((s, a) => s + a.betrag, 0);
+            const nachMitglied = config.liste.reduce((acc, a) => {
+                if (!acc[a.mitglied]) acc[a.mitglied] = { summe: 0, anzahl: 0 };
+                acc[a.mitglied].summe += a.betrag;
+                acc[a.mitglied].anzahl++;
+                return acc;
+            }, {});
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <div>
+                                <h2 class="text-xl font-bold text-gray-800">${config.titel}</h2>
+                                <p class="${config.farbe} font-semibold text-lg">${summe.toFixed(2)} € · ${config.liste.length} Positionen</p>
+                            </div>
+                            <button onclick="state.panelModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="overflow-y-auto flex-1 p-4">
+                            ${Object.keys(nachMitglied).length === 0 ? '<p class="text-gray-400 text-center py-8">Keine Einträge</p>' :
+                            Object.entries(nachMitglied)
+                                .sort((a, b) => b[1].summe - a[1].summe)
+                                .map(([name, d]) => `
+                                <div class="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+                                    <div>
+                                        <p class="font-medium text-gray-800">${name}</p>
+                                        <p class="text-xs text-gray-400">${d.anzahl} Position${d.anzahl !== 1 ? 'en' : ''}</p>
+                                    </div>
+                                    <p class="font-bold ${config.farbe}">${d.summe.toFixed(2)} €</p>
+                                </div>`).join('')}
+                        </div>
+                        <div class="p-4 border-t border-gray-100">
+                            <button onclick="state.panelModal.open = false; render();"
+                                class="w-full py-2 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50">
+                                Schließen
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Kassenwart: Auslage für Mitglied erfassen ---
+        function openAuslageModal() {
+            state.auslageModal = {
+                open: true, mitglied: state.mitglieder[0] || '',
+                betrag: '', datum: new Date().toISOString().split('T')[0],
+                zweck: '', kategorie: state.kategorien[0] || '', belege: []
+            };
+            render();
+        }
+
+        async function handleAuslageModalSubmit(event) {
+            event.preventDefault();
+            const m = state.auslageModal;
+            if (!m.mitglied || !m.betrag || !m.datum || !m.zweck || !m.kategorie) return;
+            try {
+                await api('/api/auslagen', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        mitglied: m.mitglied,
+                        betrag: parseFloat(m.betrag),
+                        datum: m.datum,
+                        zweck: m.zweck,
+                        kategorie: m.kategorie,
+                        beleg: m.belege.length > 0 ? JSON.stringify(m.belege) : null
+                    })
+                });
+                state.auslageModal.open = false;
+                state.toast = `Auslage für ${m.mitglied} erfasst.`;
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        function handleAuslageModalBeleg(event) {
+            const files = Array.from(event.target.files);
+            if (!files.length) return;
+            let pending = files.length;
+            files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const max = 1200;
+                        let w = img.width, h = img.height;
+                        if (w > max || h > max) { if (w > h) { h = Math.round(h * max / w); w = max; } else { w = Math.round(w * max / h); h = max; } }
+                        canvas.width = w; canvas.height = h;
+                        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                        state.auslageModal.belege.push(canvas.toDataURL('image/jpeg', 0.7));
+                        if (--pending === 0) render();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            event.target.value = '';
+        }
+
+        function removeAuslageBeleg(index) {
+            state.auslageModal.belege.splice(index, 1);
+            render();
+        }
+
+        function renderAuslageModal() {
+            if (!state.auslageModal.open) return '';
+            const m = state.auslageModal;
+            const mitglieder = state.mitglieder;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between sticky top-0 bg-white z-10">
+                            <h2 class="text-xl font-bold text-gray-800">Auslage für Mitglied erfassen</h2>
+                            <button onclick="state.auslageModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        <form onsubmit="handleAuslageModalSubmit(event)" class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Mitglied *</label>
+                                <select onchange="state.auslageModal.mitglied = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                    ${mitglieder.map(name => `<option ${m.mitglied === name ? 'selected' : ''}>${name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Betrag (€) *</label>
+                                <input type="number" step="0.01" required value="${m.betrag}"
+                                    oninput="state.auslageModal.betrag = this.value; negWarn(this, 'neg-warn-auslage')"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    placeholder="z.B. 12.50" />
+                                <div id="neg-warn-auslage" style="display:${parseFloat(m.betrag) < 0 ? 'flex' : 'none'}" class="mt-1 items-center gap-1 text-amber-600 text-sm font-medium">
+                                    ⚠️ Negativer Betrag erkannt – bist du wirklich sicher?
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Datum *</label>
+                                <input type="date" required value="${m.datum}"
+                                    oninput="state.auslageModal.datum = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Kategorie</label>
+                                <select onchange="state.auslageModal.kategorie = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                    ${state.kategorien.map(kat => `<option ${m.kategorie === kat ? 'selected' : ''}>${kat}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Zweck / Beschreibung *</label>
+                                <textarea required oninput="state.auslageModal.zweck = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    rows="3" placeholder="z.B. Stoffe für Kostüme…">${m.zweck}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Beleg (optional)</label>
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                    ${m.belege.length > 0 ? `
+                                        <div class="grid grid-cols-3 gap-2 mb-3">
+                                            ${m.belege.map((b, i) => `
+                                                <div class="relative">
+                                                    <img src="${b}" class="w-full h-24 object-cover rounded" />
+                                                    <button type="button" onclick="removeAuslageBeleg(${i})"
+                                                        class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-5 text-center hover:bg-red-600">✕</button>
+                                                </div>`).join('')}
+                                        </div>` : ''}
+                                    <div class="text-center">
+                                        <input type="file" accept="image/*" multiple onchange="handleAuslageModalBeleg(event)" class="hidden" id="auslage-modal-beleg" />
+                                        <label for="auslage-modal-beleg" class="cursor-pointer text-verein-pink hover:bg-verein-pink-light px-3 py-1 rounded font-medium transition inline-block">
+                                            📸 ${m.belege.length > 0 ? 'Weitere Fotos' : 'Fotos auswählen'}
+                                        </label>
+                                        <p class="text-xs text-gray-400 mt-1">JPG, PNG, max 10MB</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 pt-2">
+                                <button type="button" onclick="state.auslageModal.open = false; render();"
+                                    class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50">
+                                    Abbrechen
+                                </button>
+                                <button type="submit"
+                                    class="flex-1 py-3 rounded-lg bg-verein-pink text-white font-semibold hover:bg-verein-pink-dark transition">
+                                    Auslage erfassen
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>`;
+        }
+
+        // --- Import ---
+        function handleImportFile(event) {
+            const file = event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const text = e.target.result.replace(/^﻿/, '').replace(/\r/g, '');
+                const lines = text.split('\n').filter(l => l.trim());
+                if (lines.length < 2) {
+                    state.importModal = { open: true, rows: [], selected: [], loading: false, error: 'Datei enthält keine Daten.' };
+                    render();
+                    return;
+                }
+                const rows = lines.slice(1).map((line, i) => {
+                    const cols = line.split(';').map(c => c.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+                    return {
+                        _id: i,
+                        datum: cols[0] || '',
+                        mitglied: cols[1] || '',
+                        kategorie: cols[2] || '',
+                        zweck: cols[3] || '',
+                        betrag: parseFloat((cols[4] || '0').replace(',', '.')),
+                        status: cols[5] || 'offen'
+                    };
+                }).filter(r => r.mitglied && r.betrag > 0);
+                state.importModal = { open: true, rows, selected: rows.map(r => r._id), loading: false, error: '' };
+                render();
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function toggleImportRow(id) {
+            const idx = state.importModal.selected.indexOf(id);
+            if (idx === -1) state.importModal.selected.push(id);
+            else state.importModal.selected.splice(idx, 1);
+            render();
+        }
+
+        function toggleAllImport() {
+            if (state.importModal.selected.length === state.importModal.rows.length) {
+                state.importModal.selected = [];
+            } else {
+                state.importModal.selected = state.importModal.rows.map(r => r._id);
+            }
+            render();
+        }
+
+        async function handleImport() {
+            const toImport = state.importModal.rows.filter(r => state.importModal.selected.includes(r._id));
+            if (toImport.length === 0) { state.importModal.error = 'Keine Einträge ausgewählt.'; render(); return; }
+            state.importModal.loading = true;
+            state.importModal.error = '';
+            render();
+            try {
+                const result = await api('/api/auslagen/bulk', {
+                    method: 'POST',
+                    body: JSON.stringify({ auslagen: toImport })
+                });
+                state.importModal.open = false;
+                state.toast = `${result.inserted} Auslagen erfolgreich importiert.`;
+                await loadData();
+            } catch (e) {
+                state.importModal.loading = false;
+                state.importModal.error = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        function renderImportModal() {
+            if (!state.importModal.open) return '';
+            const { rows, selected, loading, error } = state.importModal;
+            const allSelected = selected.length === rows.length && rows.length > 0;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+                        <div class="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h2 class="text-xl font-bold text-gray-800">📂 CSV importieren</h2>
+                            <button onclick="state.importModal.open = false; render();" class="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+                        </div>
+                        ${rows.length === 0 ? `
+                            <div class="p-8 text-center text-gray-500">${error || 'Keine gültigen Daten gefunden.'}</div>
+                        ` : `
+                            <div class="p-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                                <span class="text-sm text-gray-600">${rows.length} Einträge gefunden · <strong>${selected.length}</strong> ausgewählt</span>
+                                <button onclick="toggleAllImport()" class="text-sm px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">
+                                    ${allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+                                </button>
+                            </div>
+                            <div class="overflow-auto flex-1">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 sticky top-0">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left w-8"></th>
+                                            <th class="px-4 py-3 text-left">Datum</th>
+                                            <th class="px-4 py-3 text-left">Mitglied</th>
+                                            <th class="px-4 py-3 text-left">Kategorie</th>
+                                            <th class="px-4 py-3 text-left">Zweck</th>
+                                            <th class="px-4 py-3 text-right">Betrag</th>
+                                            <th class="px-4 py-3 text-center">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        ${rows.map(r => `
+                                            <tr class="hover:bg-gray-50 cursor-pointer ${selected.includes(r._id) ? '' : 'opacity-40'}" onclick="toggleImportRow(${r._id})">
+                                                <td class="px-4 py-3">
+                                                    <input type="checkbox" ${selected.includes(r._id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleImportRow(${r._id})" class="accent-verein-pink" />
+                                                </td>
+                                                <td class="px-4 py-3">${r.datum}</td>
+                                                <td class="px-4 py-3 font-medium">${r.mitglied}</td>
+                                                <td class="px-4 py-3">${r.kategorie}</td>
+                                                <td class="px-4 py-3 max-w-xs truncate">${r.zweck}</td>
+                                                <td class="px-4 py-3 text-right font-mono">${r.betrag.toFixed(2)} €</td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span class="px-2 py-0.5 rounded-full text-xs ${r.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' : 'bg-green-100 text-green-700'}">${r.status}</span>
+                                                </td>
+                                            </tr>`).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+                        ${error ? `<p class="px-6 py-2 text-red-600 text-sm">${error}</p>` : ''}
+                        <div class="p-6 border-t border-gray-200 flex gap-3 justify-end">
+                            <button onclick="state.importModal.open = false; render();"
+                                class="px-5 py-2 rounded-lg border-2 border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold">
+                                Abbrechen
+                            </button>
+                            <button onclick="handleImport()" ${loading || selected.length === 0 ? 'disabled' : ''}
+                                class="px-5 py-2 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 font-semibold disabled:opacity-50">
+                                ${loading ? 'Importiere…' : `${selected.length} Einträge importieren`}
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        function renderKassensturzModal() {
+            if (!state.kassensturz.open) return '';
+            const summeOffen = state.auslagen.filter(a => !a.geloescht && a.status === 'offen').reduce((s, a) => s + a.betrag, 0);
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Kassensturz durchführen</h2>
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4 text-sm text-red-800">
+                            <strong>Achtung:</strong> Diese Aktion exportiert alle aktuellen Auslagen (${state.auslagen.length} Einträge)
+                            nach Google Drive und löscht sie anschließend unwiderruflich.
+                        </div>
+                        <div class="bg-gray-50 rounded-lg p-4 mb-4 text-sm space-y-1">
+                            <div class="flex justify-between"><span class="text-gray-600">Auslagen gesamt:</span><span class="font-medium">${state.auslagen.length} Einträge</span></div>
+                            <div class="flex justify-between"><span class="text-gray-600">Davon offen:</span><span class="font-medium text-verein-pink">${summeOffen.toFixed(2)} €</span></div>
+                            <div class="flex justify-between"><span class="text-gray-600">Aktueller Kassenbestand:</span><span class="font-medium">${state.kassenbestand.toFixed(2)} €</span></div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Neuer Kassenbestand (€)</label>
+                            <input type="number" id="kassensturzStand" min="0" step="0.01" placeholder="z.B. 5000.00"
+                                class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none text-lg font-mono" />
+                        </div>
+                        ${state.kassensturz.error ? `<p class="text-red-600 text-sm mb-3">${state.kassensturz.error}</p>` : ''}
+                        <div class="flex gap-3">
+                            <button onclick="closeKassensturz()"
+                                class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition">
+                                Abbrechen
+                            </button>
+                            <button onclick="handleKassensturz()" ${state.kassensturz.loading ? 'disabled' : ''}
+                                class="flex-1 py-3 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700 transition disabled:opacity-50">
+                                ${state.kassensturz.loading ? 'Wird ausgeführt…' : 'Kassensturz starten'}
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Auszahlungs-Modal ---
+        function openBelegModal(mitglied) {
+            const belegeDesMitglieds = state.auslagen.filter(a => !a.geloescht && a.mitglied === mitglied && a.status === 'offen');
+            state.modal = { open: true, mitglied, belegeDesMitglieds, ausgewaehlt: [] };
+            render();
+        }
+
+        function toggleBeleg(id) {
+            const idx = state.modal.ausgewaehlt.indexOf(id);
+            if (idx === -1) state.modal.ausgewaehlt.push(id);
+            else state.modal.ausgewaehlt.splice(idx, 1);
+            render();
+        }
+
+        async function bezahleAusgewaehlt() {
+            if (state.modal.ausgewaehlt.length === 0) { alert('Bitte mindestens einen Beleg auswählen!'); return; }
+            try {
+                await Promise.all(state.modal.ausgewaehlt.map(id =>
+                    api('/api/auslagen/' + id + '/status', { method: 'PATCH', body: JSON.stringify({ status: 'bezahlt' }) })
+                ));
+                state.modal = { open: false, mitglied: null, belegeDesMitglieds: [], ausgewaehlt: [] };
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        function closeModal() {
+            state.modal = { open: false, mitglied: null, belegeDesMitglieds: [], ausgewaehlt: [] };
+            render();
+        }
+
+        // --- Löschen ---
+        async function deleteAuslage(id) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (!auslage) return;
+            if (state.currentUser.rolle === 'mitglied' && auslage.status !== 'offen') {
+                state.toast = 'Nur offene Auslagen können gelöscht werden!';
+                render();
+                return;
+            }
+            const bestaetigt = confirm(`Auslage wirklich löschen?\n\n${auslage.mitglied} – ${auslage.zweck} (${auslage.betrag.toFixed(2)} €)\n\nDie Auslage bleibt für den Kassenwart zur Nachvollziehbarkeit einsehbar.`);
+            if (!bestaetigt) return;
+            try {
+                await api('/api/auslagen/' + id, { method: 'DELETE' });
+                state.toast = 'Auslage gelöscht (bleibt für Kassenwart sichtbar)';
+                await loadData();
+            } catch (e) {
+                state.toast = 'Fehler: ' + e.message;
+                render();
+            }
+        }
+
+        // --- Bearbeiten Modal ---
+        function openEditModal(id) {
+            const auslage = state.auslagen.find(a => a.id === id);
+            if (!auslage) return;
+            if (state.currentUser.rolle === 'mitglied') {
+                if (auslage.mitglied !== state.currentUser.name || auslage.status !== 'offen') {
+                    state.toast = 'Nur eigene offene Auslagen können bearbeitet werden!';
+                    render();
+                    return;
+                }
+            }
+            state.editModal = {
+                open: true,
+                auslage,
+                formData: { betrag: auslage.betrag, datum: auslage.datum, zweck: auslage.zweck, kategorie: auslage.kategorie }
+            };
+            render();
+        }
+
+        function closeEditModal() {
+            state.editModal = { open: false, auslage: null, formData: {} };
+            render();
+        }
+
+        async function saveEdit() {
+            const auslage = state.auslagen.find(a => a.id === state.editModal.auslage.id);
+            if (!auslage) return;
+            const aenderungen = [];
+            const neu = state.editModal.formData;
+            if (parseFloat(neu.betrag) !== auslage.betrag)
+                aenderungen.push({ feld: 'Betrag', alt: auslage.betrag.toFixed(2) + ' €', neu: parseFloat(neu.betrag).toFixed(2) + ' €' });
+            if (neu.datum !== auslage.datum)
+                aenderungen.push({ feld: 'Datum', alt: auslage.datum, neu: neu.datum });
+            if (neu.zweck !== auslage.zweck)
+                aenderungen.push({ feld: 'Zweck', alt: auslage.zweck, neu: neu.zweck });
+            if (neu.kategorie !== auslage.kategorie)
+                aenderungen.push({ feld: 'Kategorie', alt: auslage.kategorie, neu: neu.kategorie });
+
+            if (aenderungen.length > 0) {
+                const historie = Array.isArray(auslage.historie) ? [...auslage.historie] : [];
+                historie.push({ zeitpunkt: new Date().toISOString(), aktion: 'Bearbeitet', benutzer: state.currentUser.name, aenderungen });
+                try {
+                    await api('/api/auslagen/' + auslage.id, {
+                        method: 'PUT',
+                        body: JSON.stringify({ betrag: parseFloat(neu.betrag), datum: neu.datum, zweck: neu.zweck, kategorie: neu.kategorie, historie })
+                    });
+                    state.toast = 'Änderungen erfolgreich gespeichert!';
+                } catch (e) {
+                    state.toast = 'Fehler: ' + e.message;
+                }
+            } else {
+                state.toast = 'Keine Änderungen vorgenommen.';
+            }
+            closeEditModal();
+            await loadData();
+        }
+
+        // --- Render: Beleg Overlay ---
+        function renderBelegOverlay() {
+            if (!state.belegOverlay) return '';
+            const a = state.belegOverlay;
+            const bilder = getBelege(a.beleg);
+            const idx = Math.max(0, Math.min(state.belegOverlayIdx, bilder.length - 1));
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 z-50" onclick="closeBelegOverlay()"></div>
+                <div class="fixed top-0 right-0 h-full w-full max-w-lg bg-white z-50 shadow-2xl flex flex-col">
+                    <div class="bg-verein-darkblue text-white p-5 flex justify-between items-center flex-shrink-0">
+                        <div>
+                            <p class="text-xs text-cyan-300 mb-1">Beleg von</p>
+                            <h2 class="text-lg font-bold">${a.mitglied}</h2>
+                        </div>
+                        <button onclick="closeBelegOverlay()" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white rounded-full w-10 h-10 flex items-center justify-center text-xl font-bold transition">✕</button>
+                    </div>
+                    <div class="p-5 border-b border-gray-100 flex-shrink-0">
+                        <h3 class="font-semibold text-gray-800 text-lg mb-1">${a.zweck}</h3>
+                        <div class="flex flex-wrap gap-3 mt-2">
+                            <span class="text-2xl font-bold text-verein-pink">${a.betrag.toFixed(2)} €</span>
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' : 'bg-green-100 text-green-700'}">
+                                ${a.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}
+                            </span>
+                        </div>
+                        <div class="flex gap-4 mt-3 text-sm text-gray-500">
+                            <span>📅 ${a.datum}</span>
+                            <span>🏷️ ${a.kategorie}</span>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto p-5">
+                        <div class="flex items-center justify-between mb-3">
+                            <p class="text-xs text-gray-400 uppercase font-semibold">Foto ${idx + 1} von ${bilder.length}</p>
+                            ${bilder.length > 1 ? `
+                                <div class="flex gap-2">
+                                    <button onclick="state.belegOverlayIdx = Math.max(0, ${idx} - 1); render();" ${idx === 0 ? 'disabled' : ''}
+                                        class="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm disabled:opacity-30">← Zurück</button>
+                                    <button onclick="state.belegOverlayIdx = Math.min(${bilder.length - 1}, ${idx} + 1); render();" ${idx === bilder.length - 1 ? 'disabled' : ''}
+                                        class="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm disabled:opacity-30">Weiter →</button>
+                                </div>` : ''}
+                        </div>
+                        <img src="${bilder[idx]}" alt="Beleg" class="w-full object-contain rounded-xl border border-gray-200" />
+                        ${bilder.length > 1 ? `
+                            <div class="flex gap-2 mt-3 overflow-x-auto pb-1">
+                                ${bilder.map((b, i) => `<img src="${b}" onclick="state.belegOverlayIdx = ${i}; render();"
+                                    class="h-14 w-14 object-cover rounded cursor-pointer flex-shrink-0 border-2 ${i === idx ? 'border-verein-pink' : 'border-transparent hover:border-gray-300'}" />`).join('')}
+                            </div>` : ''}
+                    </div>
+                    <div class="p-5 border-t border-gray-100 flex-shrink-0">
+                        <div class="flex gap-3">
+                            ${a.status === 'offen' ? `<button onclick="updateStatus(${a.id}, 'bezahlt'); closeBelegOverlay();" class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition">💰 Bezahlen</button>` : ''}
+                            <button onclick="openEditModal(${a.id}); closeBelegOverlay();" class="flex-1 py-3 rounded-lg bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-semibold transition">✏️ Bearbeiten</button>
+                            <button onclick="closeBelegOverlay()" class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition">Schließen</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Edit Modal ---
+        function renderEditModal() {
+            if (!state.editModal.open) return '';
+            const a = state.editModal.auslage;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeEditModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Auslage bearbeiten</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${a.mitglied} • ${a.status}</p>
+                            </div>
+                            <button onclick="closeEditModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Betrag (€) *</label>
+                                <input type="number" step="0.01" required value="${state.editModal.formData.betrag}"
+                                    oninput="state.editModal.formData.betrag = this.value; negWarn(this, 'neg-warn-edit')"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                <div id="neg-warn-edit" style="display:${parseFloat(state.editModal.formData.betrag) < 0 ? 'flex' : 'none'}" class="mt-1 items-center gap-1 text-amber-600 text-sm font-medium">
+                                    ⚠️ Negativer Betrag erkannt – bist du wirklich sicher?
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Datum *</label>
+                                <input type="date" required value="${state.editModal.formData.datum}"
+                                    oninput="state.editModal.formData.datum = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
+                                <select onchange="state.editModal.formData.kategorie = this.value; render();"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                    ${state.kategorien.map(kat => `<option ${state.editModal.formData.kategorie === kat ? 'selected' : ''}>${kat}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Zweck / Beschreibung *</label>
+                                <textarea required oninput="state.editModal.formData.zweck = this.value"
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" rows="3">${state.editModal.formData.zweck}</textarea>
+                            </div>
+                            ${a.historie && a.historie.length > 1 ? `
+                                <div class="border-t pt-4 mt-6">
+                                    <h3 class="text-sm font-semibold text-gray-700 mb-3">📜 Änderungshistorie</h3>
+                                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                                        ${a.historie.slice().reverse().map(h => `
+                                            <div class="text-xs bg-gray-50 p-3 rounded">
+                                                <div class="flex justify-between items-start mb-1">
+                                                    <span class="font-semibold text-gray-700">${h.aktion}</span>
+                                                    <span class="text-gray-400">${new Date(h.zeitpunkt).toLocaleString('de-DE')}</span>
+                                                </div>
+                                                <p class="text-gray-500">von ${h.benutzer}</p>
+                                                ${h.aenderungen ? `<div class="mt-2 space-y-1">${h.aenderungen.map(ae => `<div class="text-gray-600"><strong>${ae.feld}:</strong> <span class="line-through text-red-500">${ae.alt}</span> → <span class="text-green-600">${ae.neu}</span></div>`).join('')}</div>` : ''}
+                                            </div>`).join('')}
+                                    </div>
+                                </div>` : ''}
+                        </div>
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl flex gap-3">
+                            <button onclick="closeEditModal()" class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition">Abbrechen</button>
+                            <button onclick="saveEdit()" class="flex-1 py-3 rounded-lg bg-verein-pink hover:bg-verein-pink-dark text-white font-semibold transition">✓ Änderungen speichern</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Report Modal ---
+        function renderReportModal() {
+            if (!state.reportModal.open) return '';
+            const gesamtSumme = state.reportModal.data ? state.reportModal.data.reduce((s, d) => s + d.summe, 0) : 0;
+            const gesamtAnzahl = state.reportModal.data ? state.reportModal.data.reduce((s, d) => s + d.anzahl, 0) : 0;
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeReportModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">📊 Auswertung erstellen</h2>
+                                <p class="text-cyan-200 text-sm mt-1">Kosten analysieren und exportieren</p>
+                            </div>
+                            <button onclick="closeReportModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Report-Typ</label>
+                                    <select onchange="state.reportModal.typ = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                        <option value="kategorie" ${state.reportModal.typ === 'kategorie' ? 'selected' : ''}>Nach Kategorie</option>
+                                        <option value="mitglied" ${state.reportModal.typ === 'mitglied' ? 'selected' : ''}>Nach Mitglied</option>
+                                        <option value="monat" ${state.reportModal.typ === 'monat' ? 'selected' : ''}>Nach Monat</option>
+                                        <option value="status" ${state.reportModal.typ === 'status' ? 'selected' : ''}>Nach Status</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Von Datum</label>
+                                    <input type="date" value="${state.reportModal.vonDatum}"
+                                        onchange="state.reportModal.vonDatum = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Bis Datum</label>
+                                    <input type="date" value="${state.reportModal.bisDatum}"
+                                        onchange="state.reportModal.bisDatum = this.value; generateReport();"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                </div>
+                            </div>
+                            ${state.reportModal.data && state.reportModal.data.length > 0 ? `
+                                <div class="border-t pt-4">
+                                    <div class="flex justify-between items-center mb-4">
+                                        <h3 class="text-lg font-bold text-gray-800">Vorschau</h3>
+                                        <div class="text-right">
+                                            <p class="text-sm text-gray-500">Gesamt</p>
+                                            <p class="text-xl font-bold text-verein-pink">${gesamtSumme.toFixed(2)} €</p>
+                                            <p class="text-xs text-gray-400">${gesamtAnzahl} Belege</p>
+                                        </div>
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead class="bg-gray-50">
+                                                <tr>
+                                                    <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-8"></th>
+                                                    ${state.reportModal.typ === 'kategorie' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategorie</th>' : ''}
+                                                    ${state.reportModal.typ === 'mitglied' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>' : ''}
+                                                    ${state.reportModal.typ === 'monat' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Monat</th>' : ''}
+                                                    ${state.reportModal.typ === 'status' ? '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Status</th>' : ''}
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Anzahl</th>
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Summe</th>
+                                                    <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Anteil</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200">
+                                                ${state.reportModal.data.map(d => {
+                                                    const anteil = (d.summe / gesamtSumme * 100).toFixed(1);
+                                                    const isExp = state.reportModal.expandedRow === d.key;
+                                                    return `
+                                                        <tr class="hover:bg-gray-50 cursor-pointer" onclick="toggleReportRow('${d.key.replace(/'/g, "\\'")}')">
+                                                            <td class="px-4 py-3 text-sm text-center"><span class="text-gray-400">${isExp ? '▼' : '▶'}</span></td>
+                                                            ${state.reportModal.typ === 'kategorie' ? `<td class="px-4 py-3 text-sm font-medium">${d.kategorie}</td>` : ''}
+                                                            ${state.reportModal.typ === 'mitglied' ? `<td class="px-4 py-3 text-sm font-medium">${d.mitglied}</td>` : ''}
+                                                            ${state.reportModal.typ === 'monat' ? `<td class="px-4 py-3 text-sm font-medium">${d.monat}</td>` : ''}
+                                                            ${state.reportModal.typ === 'status' ? `<td class="px-4 py-3 text-sm font-medium">${d.status}</td>` : ''}
+                                                            <td class="px-4 py-3 text-sm text-right">${d.anzahl}</td>
+                                                            <td class="px-4 py-3 text-sm text-right font-semibold">${d.summe.toFixed(2)} €</td>
+                                                            <td class="px-4 py-3 text-sm text-right">
+                                                                <div class="flex items-center justify-end gap-2">
+                                                                    <div class="w-16 bg-gray-200 rounded-full h-2">
+                                                                        <div class="bg-verein-pink h-2 rounded-full" style="width:${anteil}%"></div>
+                                                                    </div>
+                                                                    <span class="text-gray-500">${anteil}%</span>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                        ${isExp ? `<tr><td colspan="7" class="px-0 py-0">
+                                                            <div class="bg-gray-50 px-8 py-4">
+                                                                <p class="text-xs font-semibold text-gray-500 uppercase mb-3">Einzelne Auslagen</p>
+                                                                <div class="space-y-2">${d.auslagen.map(a => `
+                                                                    <div class="bg-white rounded-lg p-3 border border-gray-200">
+                                                                        <div class="flex justify-between items-start">
+                                                                            <div class="flex-1">
+                                                                                <p class="font-medium text-gray-800 text-sm">${a.zweck}</p>
+                                                                                <div class="flex gap-3 mt-1 text-xs text-gray-500">
+                                                                                    <span>📅 ${a.datum}</span>
+                                                                                    <span>👤 ${a.mitglied}</span>
+                                                                                    <span class="px-2 py-0.5 rounded-full ${a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' : 'bg-green-100 text-green-700'}">${a.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <p class="text-lg font-bold text-verein-pink ml-4">${a.betrag.toFixed(2)} €</p>
+                                                                        </div>
+                                                                    </div>`).join('')}
+                                                                </div>
+                                                            </div>
+                                                        </td></tr>` : ''}`;
+                                                }).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>` : `
+                                <div class="text-center py-12">
+                                    <p class="text-gray-400 text-lg">📊</p>
+                                    <p class="text-gray-500 mt-2">Keine Daten für diesen Zeitraum</p>
+                                </div>`}
+                        </div>
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl flex gap-3">
+                            <button onclick="closeReportModal()" class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition">Schließen</button>
+                            <button onclick="exportReport()" class="flex-1 py-3 rounded-lg bg-green-500 hover:bg-green-600 text-white font-semibold transition ${!state.reportModal.data || state.reportModal.data.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}" ${!state.reportModal.data || state.reportModal.data.length === 0 ? 'disabled' : ''}>📥 Als CSV exportieren</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Kategorien Modal ---
+        function renderKategorienModal() {
+            if (!state.kategorienModal.open) return '';
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeKategorienModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Kategorien verwalten</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${state.kategorien.length} Kategorien</p>
+                            </div>
+                            <button onclick="closeKategorienModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+                        <div class="p-6">
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Neue Kategorie hinzufügen</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="neue-kategorie-input" placeholder="z.B. Dekoration"
+                                        value="${state.kategorienModal.neueKategorie}"
+                                        oninput="state.kategorienModal.neueKategorie = this.value"
+                                        onkeypress="if(event.key === 'Enter') addKategorie()"
+                                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                    <button onclick="addKategorie()" class="px-4 py-2 bg-verein-pink hover:bg-verein-pink-dark text-white rounded-lg font-semibold transition">+ Hinzufügen</button>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <h3 class="text-sm font-semibold text-gray-700 mb-3">Bestehende Kategorien</h3>
+                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                    ${state.kategorien.map(kat => {
+                                        const inUse = state.auslagen.some(a => a.kategorie === kat);
+                                        return `<div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                                            <span class="font-medium text-gray-700">${kat}</span>
+                                            <div class="flex items-center gap-2">
+                                                ${inUse ? '<span class="text-xs text-gray-400 bg-white px-2 py-1 rounded">in Benutzung</span>' : ''}
+                                                <button onclick="deleteKategorie('${kat.replace(/'/g, "\\'")}')"
+                                                    class="px-3 py-1 ${inUse ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-100 text-red-600 hover:bg-red-200'} text-xs rounded transition"
+                                                    ${inUse ? 'disabled' : ''}>🗑️ Löschen</button>
+                                            </div>
+                                        </div>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+                            <button onclick="closeKategorienModal()" class="w-full py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition">Fertig</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Lade-Overlay ---
+        function renderLoading() {
+            if (!state.loading) return '';
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-2xl shadow-2xl px-12 py-10 flex flex-col items-center gap-6">
+                        <div class="flex items-center gap-1">
+                            <span class="dot dot-1"></span>
+                            <span class="dot dot-2"></span>
+                            <span class="dot dot-3"></span>
+                        </div>
+                        <p class="text-gray-700 font-semibold text-lg">Wird hochgeladen…</p>
+                        <p class="text-gray-400 text-sm">Google Drive wird kontaktiert</p>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Toast ---
+        function renderToast() {
+            if (!state.toast) return '';
+            setTimeout(() => { state.toast = null; render(); }, 4000);
+            return `
+                <div class="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-verein-darkblue text-white px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3">
+                    <span class="text-2xl">✓</span>
+                    <p class="font-semibold">${state.toast}</p>
+                    <button onclick="state.toast = null; render();" class="ml-4 bg-verein-pink hover:bg-verein-pink-dark px-3 py-1 rounded-lg text-sm font-semibold transition">OK</button>
+                </div>`;
+        }
+
+        // --- Render: Auszahlungs-Modal ---
+        function renderModal() {
+            if (!state.modal.open) return '';
+            const summeAusgewaehlt = state.modal.ausgewaehlt.reduce((sum, id) => {
+                const a = state.auslagen.find(a => a.id === id);
+                return sum + (a ? a.betrag : 0);
+            }, 0);
+            return `
+                <div class="fixed inset-0 bg-black bg-opacity-60 z-50 flex items-center justify-center p-4" onclick="closeModal()">
+                    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-screen overflow-y-auto" onclick="event.stopPropagation()">
+                        <div class="bg-verein-darkblue text-white p-6 rounded-t-2xl flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-bold">Belege von ${state.modal.mitglied}</h2>
+                                <p class="text-cyan-200 text-sm mt-1">${state.modal.belegeDesMitglieds.length} offene Positionen</p>
+                            </div>
+                            <button onclick="closeModal()" class="text-white hover:text-cyan-200 text-2xl font-bold">✕</button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            ${state.modal.belegeDesMitglieds.map(auslage => {
+                                const isChecked = state.modal.ausgewaehlt.includes(auslage.id);
+                                return `<div onclick="toggleBeleg(${auslage.id})"
+                                    class="border-2 rounded-xl p-4 cursor-pointer transition-all ${isChecked ? 'border-verein-pink bg-verein-pink-light' : 'border-gray-200 hover:border-gray-300'}">
+                                    <div class="flex items-start gap-4">
+                                        <div class="mt-1">
+                                            <div class="w-6 h-6 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-verein-pink border-verein-pink' : 'border-gray-400'}">
+                                                ${isChecked ? '<span class="text-white text-xs font-bold">✓</span>' : ''}
+                                            </div>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="flex justify-between items-start">
+                                                <div>
+                                                    <p class="font-semibold text-gray-800">${auslage.zweck}</p>
+                                                    <p class="text-sm text-gray-500">${auslage.kategorie} • ${auslage.datum}</p>
+                                                    <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-xs bg-cyan-100 text-verein-cyan">⏳ Offen</span>
+                                                </div>
+                                                <p class="text-xl font-bold text-verein-pink ml-4">${auslage.betrag.toFixed(2)} €</p>
+                                            </div>
+                                            ${(() => {
+                                                const bb = getBelege(auslage.beleg);
+                                                if (bb.length === 0) return '<p class="text-xs text-gray-400 mt-2">📷 Kein Beleg hochgeladen</p>';
+                                                return `<div class="mt-3 flex gap-2 overflow-x-auto">${bb.map((b, i) => `<img src="${b}" alt="Beleg" onclick="viewBeleg(${auslage.id}, ${i})" class="h-28 w-28 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 flex-shrink-0" />`).join('')}</div>`;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>`;
+                            }).join('')}
+                        </div>
+                        <div class="sticky bottom-0 bg-white border-t border-gray-200 p-6 rounded-b-2xl">
+                            <div class="flex justify-between items-center mb-4">
+                                <p class="text-gray-600 text-sm">${state.modal.ausgewaehlt.length} von ${state.modal.belegeDesMitglieds.length} ausgewählt</p>
+                                <p class="text-2xl font-bold text-verein-pink">${summeAusgewaehlt.toFixed(2)} €</p>
+                            </div>
+                            <div class="flex gap-3">
+                                <button onclick="closeModal()" class="flex-1 py-3 rounded-lg border-2 border-gray-300 text-gray-600 font-semibold hover:bg-gray-50 transition">Abbrechen</button>
+                                <button onclick="bezahleAusgewaehlt()"
+                                    class="flex-1 py-3 rounded-lg font-semibold text-white transition ${state.modal.ausgewaehlt.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-verein-pink hover:bg-verein-pink-dark'}"
+                                    ${state.modal.ausgewaehlt.length === 0 ? 'disabled' : ''}>
+                                    💰 ${state.modal.ausgewaehlt.length} Belege bezahlen
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Login ---
+        function renderLogin() {
+            return `
+                <div class="min-h-screen bg-gradient-verein flex items-center justify-center p-4">
+                    <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                        <div class="text-center mb-8">
+                            <img src="/logo.png" alt="Gut und Aussehend" class="w-48 h-48 mx-auto mb-4 object-contain" onerror="this.style.display='none'" />
+                            <h2 class="text-2xl font-semibold text-gray-800">Auslagen-Verwaltung</h2>
+                        </div>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Benutzername</label>
+                                <input type="text" id="loginName" placeholder="z.B. lfucke"
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    onkeypress="handleLoginKeypress(event)" autocomplete="username" autocapitalize="none" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Passwort <span class="text-gray-400 font-normal">(nur für Kassenwart)</span></label>
+                                <input type="password" id="loginPassword" placeholder="Passwort"
+                                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                    onkeypress="handleLoginKeypress(event)" autocomplete="current-password" />
+                            </div>
+                            <p id="loginError" class="text-red-600 text-sm min-h-[1.25rem]"></p>
+                            <button onclick="handleLogin()"
+                                class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition-all">
+                                Anmelden
+                            </button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Navigation ---
+        function renderNavigation() {
+            const isMitglied = state.currentUser.rolle === 'mitglied';
+            const isKassenwart = state.currentUser.rolle === 'kassenwart';
+            return `
+                <div class="bg-gradient-verein text-white p-4 shadow-lg">
+                    <div class="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-4">
+                        <div class="flex items-center gap-3">
+                            <img src="/logo.png" alt="Logo" class="w-12 h-12 object-contain" onerror="this.style.display='none'" />
+                            <div>
+                                <h1 class="text-2xl font-bold">Auslagen-Verwaltung</h1>
+                                <p class="text-cyan-200 text-sm">Angemeldet als: ${state.currentUser.name} (${state.currentUser.rolle === 'kassenwart' ? 'Kassenwart' : 'Mitglied'})</p>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            ${isMitglied ? `
+                                <button onclick="state.view = 'meine-auslagen'; render();" class="px-4 py-2 rounded ${state.view === 'meine-auslagen' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}">Meine Auslagen</button>
+                                <button onclick="state.view = 'neue-auslage'; render();" class="px-4 py-2 rounded ${state.view === 'neue-auslage' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}">+ Neue Auslage</button>
+                            ` : ''}
+                            ${isKassenwart ? `
+                                <button onclick="state.view = 'dashboard'; state.backupMenuOpen = false; render();" class="px-4 py-2 rounded ${state.view === 'dashboard' ? 'bg-white text-verein-pink' : 'bg-verein-pink hover:bg-verein-pink-dark'}">Dashboard</button>
+                                <button onclick="openAuslageModal()" class="px-4 py-2 rounded bg-verein-pink hover:bg-verein-pink-dark">+ Auslage erfassen</button>
+                                <button onclick="openReportModal()" class="px-4 py-2 rounded bg-blue-500 hover:bg-blue-600">📊 Reports</button>
+                                <button onclick="openKategorienModal()" class="px-4 py-2 rounded bg-verein-cyan hover:bg-verein-cyan-dark">🏷️ Kategorien</button>
+                                <div class="relative">
+                                    <button onclick="state.backupMenuOpen = !state.backupMenuOpen; render();"
+                                        class="px-4 py-2 rounded bg-gray-600 hover:bg-gray-700 flex items-center gap-1">
+                                        ⚙️ Verwaltung <span class="text-xs">${state.backupMenuOpen ? '▲' : '▼'}</span>
+                                    </button>
+                                    ${state.backupMenuOpen ? `
+                                    <div class="fixed inset-0 z-20" onclick="state.backupMenuOpen = false; render();"></div>
+                                    <div class="absolute right-0 top-full mt-1 bg-white rounded-lg shadow-xl border border-gray-200 z-30 w-56">
+                                        <button onclick="exportToGDrive(); state.backupMenuOpen = false;"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 rounded-t-lg border-b border-gray-100">
+                                            ☁️ Cloud Backup (Google Drive)
+                                        </button>
+                                        <button onclick="exportCSV(); state.backupMenuOpen = false; render();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100">
+                                            📥 Lokales Backup (CSV)
+                                        </button>
+                                        <button onclick="state.backupMenuOpen = false; document.getElementById('importFileInput').click();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100">
+                                            📂 CSV importieren
+                                        </button>
+                                        <button onclick="state.backupMenuOpen = false; openMassenModal();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100">
+                                            📋 Massenerfassung
+                                        </button>
+                                        <button onclick="openEinzahlungModal();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100">
+                                            💵 Einzahlung erfassen
+                                        </button>
+                                        <button onclick="state.backupMenuOpen = false; openNutzerModal();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 border-b border-gray-100">
+                                            👥 Nutzerverwaltung
+                                        </button>
+                                        <button onclick="state.backupMenuOpen = false; openKassensturz();"
+                                            class="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 flex items-center gap-2 rounded-b-lg">
+                                            🔄 Kassensturz
+                                        </button>
+                                    </div>` : ''}
+                                </div>
+                                <input type="file" id="importFileInput" accept=".csv" class="hidden" onchange="handleImportFile(event)" />
+                            ` : ''}
+                            <button onclick="handleLogout()" class="px-4 py-2 rounded bg-red-500 hover:bg-red-600">Abmelden</button>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Neue Auslage ---
+        function renderNeueAuslage() {
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-2xl mx-auto p-6">
+                        <div class="bg-white rounded-lg shadow-md p-6">
+                            <h2 class="text-2xl font-bold text-gray-800 mb-6">Neue Auslage erfassen</h2>
+                            <form onsubmit="handleSubmit(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Betrag (€) *</label>
+                                    <input type="number" step="0.01" required value="${state.formData.betrag}"
+                                        oninput="state.formData.betrag = this.value; negWarn(this, 'neg-warn-form')"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        placeholder="z.B. 12.50" />
+                                    <div id="neg-warn-form" style="display:${parseFloat(state.formData.betrag) < 0 ? 'flex' : 'none'}" class="mt-1 items-center gap-1 text-amber-600 text-sm font-medium">
+                                        ⚠️ Negativer Betrag erkannt – bist du wirklich sicher?
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Datum *</label>
+                                    <input type="date" required value="${state.formData.datum}"
+                                        oninput="state.formData.datum = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none" />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
+                                    <select onchange="state.formData.kategorie = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none">
+                                        ${state.kategorien.map(kat => `<option ${state.formData.kategorie === kat ? 'selected' : ''}>${kat}</option>`).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Zweck / Beschreibung *</label>
+                                    <textarea required oninput="state.formData.zweck = this.value"
+                                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-verein-pink focus:outline-none"
+                                        rows="3" placeholder="z.B. Stoffe für Kostüme, Getränke für Festwagen...">${state.formData.zweck}</textarea>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Beleg hochladen</label>
+                                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-4">
+                                        ${state.formData.belege.length > 0 ? `
+                                            <div class="grid grid-cols-3 gap-2 mb-3">
+                                                ${state.formData.belege.map((b, i) => `
+                                                    <div class="relative">
+                                                        <img src="${b}" class="w-full h-24 object-cover rounded" />
+                                                        <button type="button" onclick="removeBeleg(${i})"
+                                                            class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-5 text-center hover:bg-red-600">✕</button>
+                                                    </div>`).join('')}
+                                            </div>` : ''}
+                                        <div class="text-center">
+                                            <input type="file" accept="image/*" multiple onchange="handleBelegUpload(event)" class="hidden" id="beleg-upload" />
+                                            <label for="beleg-upload" class="cursor-pointer text-verein-pink hover:bg-verein-pink-light px-3 py-2 rounded font-medium transition inline-block">
+                                                📸 ${state.formData.belege.length > 0 ? 'Weitere Fotos hinzufügen' : 'Fotos auswählen'}
+                                            </label>
+                                            <p class="text-xs text-gray-500 mt-1">Mehrere Fotos möglich (JPG, PNG)</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <button type="submit" class="w-full bg-verein-pink text-white py-3 rounded-lg font-semibold hover:bg-verein-pink-dark transition-all">Auslage einreichen</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Meine Auslagen ---
+        function renderMeineAuslagen() {
+            const meineAuslagen = state.auslagen.filter(a => a.mitglied === state.currentUser.name);
+            const summeOffen = meineAuslagen.filter(a => a.status === 'offen').reduce((s, a) => s + a.betrag, 0);
+            const summeBezahlt = meineAuslagen.filter(a => a.status === 'bezahlt').reduce((s, a) => s + a.betrag, 0);
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-6xl mx-auto p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Offen</p><p class="text-3xl font-bold text-verein-cyan">${summeOffen.toFixed(2)} €</p></div>
+                                    <div class="text-4xl">⏳</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Bezahlt</p><p class="text-3xl font-bold text-green-500">${summeBezahlt.toFixed(2)} €</p></div>
+                                    <div class="text-4xl">✅</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Gesamt</p><p class="text-3xl font-bold text-verein-pink">${meineAuslagen.length}</p></div>
+                                    <div class="text-4xl">📋</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-4">Meine Auslagen</h2>
+                                ${meineAuslagen.length === 0 ? '<p class="text-gray-500 text-center py-8">Noch keine Auslagen erfasst</p>' : `
+                                    <div class="space-y-4">
+                                        ${meineAuslagen.sort((a, b) => b.id - a.id).map(auslage => `
+                                            <div class="border rounded-lg p-4 hover:shadow-md transition">
+                                                <div class="flex flex-wrap justify-between items-start mb-2 gap-4">
+                                                    <div class="flex-1 min-w-0">
+                                                        <h3 class="font-semibold text-lg">${auslage.zweck}</h3>
+                                                        <p class="text-sm text-gray-500">${auslage.kategorie} • ${auslage.datum}</p>
+                                                    </div>
+                                                    <div class="text-right">
+                                                        <p class="text-2xl font-bold text-verein-pink">${auslage.betrag.toFixed(2)} €</p>
+                                                        <span class="inline-block px-3 py-1 rounded-full text-sm font-medium ${auslage.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' : 'bg-green-100 text-green-700'}">
+                                                            ${auslage.status === 'offen' ? '⏳ Offen' : '✅ Bezahlt'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                ${(() => {
+                                                    const bb = getBelege(auslage.beleg);
+                                                    if (bb.length === 0) return '';
+                                                    return `<div class="flex gap-2 mt-2 flex-wrap">${bb.map((b, i) => `<img src="${b}" onclick="viewBeleg(${auslage.id}, ${i})" class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-80 border border-gray-200" />`).join('')}</div>`;
+                                                })()}
+                                                ${auslage.status === 'offen' ? `
+                                                    <div class="mt-3 flex gap-2">
+                                                        <button onclick="openEditModal(${auslage.id})" class="px-3 py-1 bg-blue-100 text-blue-600 text-xs rounded hover:bg-blue-200 transition">✏️ Bearbeiten</button>
+                                                        <button onclick="deleteAuslage(${auslage.id})" class="px-3 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200 transition">🗑️ Löschen</button>
+                                                    </div>` : ''}
+                                            </div>`).join('')}
+                                    </div>`}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Render: Dashboard ---
+        function renderDashboard() {
+            const aktive = state.auslagen.filter(a => !a.geloescht);
+            const offene = aktive.filter(a => a.status === 'offen');
+            const bezahlt = aktive.filter(a => a.status === 'bezahlt');
+            const summeOffen = offene.reduce((s, a) => s + a.betrag, 0);
+            const summeBezahlt = bezahlt.reduce((s, a) => s + a.betrag, 0);
+            const kassenAktuell = state.kassenbestand - summeBezahlt;
+            const kassenNachAbzug = kassenAktuell - summeOffen;
+            return `
+                <div class="min-h-screen bg-gray-50">
+                    ${renderNavigation()}
+                    <div class="max-w-6xl mx-auto p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md hover:border-2 hover:border-verein-cyan transition-all" onclick="state.panelModal = { open: true, typ: 'offen' }; render();">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Offen</p><p class="text-2xl font-bold text-verein-cyan">${summeOffen.toFixed(2)} €</p><p class="text-gray-400 text-xs">${offene.length} Positionen</p></div>
+                                    <div class="text-3xl">⏳</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md hover:border-2 hover:border-green-400 transition-all" onclick="state.panelModal = { open: true, typ: 'bezahlt' }; render();">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Bezahlt</p><p class="text-2xl font-bold text-green-500">${summeBezahlt.toFixed(2)} €</p><p class="text-gray-400 text-xs">${bezahlt.length} Positionen</p></div>
+                                    <div class="text-3xl">✅</div>
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-6 cursor-pointer hover:shadow-md hover:border-2 hover:border-verein-pink transition-all" onclick="state.panelModal = { open: true, typ: 'gesamt' }; render();">
+                                <div class="flex items-center justify-between">
+                                    <div><p class="text-gray-500 text-sm">Gesamt</p><p class="text-2xl font-bold text-verein-pink">${aktive.length}</p><p class="text-gray-400 text-xs">Aktive Auslagen</p></div>
+                                    <div class="text-3xl">📋</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div class="bg-verein-darkblue rounded-lg shadow p-6">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-cyan-200 text-sm">Kassenbestand aktuell</p>
+                                        <p class="text-3xl font-bold text-white">${kassenAktuell.toFixed(2)} €</p>
+                                        <p class="text-cyan-300 text-xs mt-1">bereits bezahlt: ${summeBezahlt.toFixed(2)} €</p>
+                                    </div>
+                                    <div class="text-3xl">🏦</div>
+                                </div>
+                            </div>
+                            <div class="rounded-lg shadow p-6 ${kassenNachAbzug < 0 ? 'bg-red-600' : 'bg-verein-pink'}">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-pink-100 text-sm">Kasse nach offenen Abzügen</p>
+                                        <p class="text-3xl font-bold text-white">${kassenNachAbzug.toFixed(2)} €</p>
+                                        <p class="text-pink-200 text-xs mt-1">Abzug: ${summeOffen.toFixed(2)} €</p>
+                                    </div>
+                                    <div class="text-3xl">${kassenNachAbzug < 0 ? '⚠️' : '✅'}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-4">💸 Auszahlungen je Mitglied</h2>
+                                ${(() => {
+                                    const nachMitglied = offene.reduce((acc, a) => {
+                                        if (!acc[a.mitglied]) acc[a.mitglied] = { summe: 0 };
+                                        acc[a.mitglied].summe += a.betrag;
+                                        return acc;
+                                    }, {});
+                                    if (Object.keys(nachMitglied).length === 0) return '<p class="text-gray-500 text-center py-4">Keine offenen Auszahlungen</p>';
+                                    return '<div class="overflow-x-auto"><table class="w-full"><thead class="bg-gray-50"><tr>' +
+                                        '<th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>' +
+                                        '<th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Auszuzahlen</th>' +
+                                        '</tr></thead><tbody class="divide-y divide-gray-200">' +
+                                        Object.entries(nachMitglied).sort((a, b) => b[1].summe - a[1].summe).map(([name, d]) =>
+                                            `<tr class="hover:bg-gray-50 cursor-pointer" onclick="openBelegModal('${name}')">
+                                                <td class="px-4 py-3 text-sm font-medium">${name}</td>
+                                                <td class="px-4 py-3 text-sm text-right font-bold text-verein-pink">${d.summe.toFixed(2)} €</td>
+                                            </tr>`
+                                        ).join('') + '</tbody></table></div>';
+                                })()}
+                            </div>
+                        </div>
+                        ${state.einzahlungen.length > 0 ? `
+                        <div class="bg-white rounded-lg shadow overflow-hidden mb-6">
+                            <div class="p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h2 class="text-xl font-bold text-gray-800">💵 Einzahlungsprotokoll</h2>
+                                    <span class="text-sm text-gray-500">${state.einzahlungen.length} Einträge • Gesamt: ${state.einzahlungen.reduce((s,e) => s + e.betrag, 0).toFixed(2)} €</span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full">
+                                        <thead class="bg-gray-50"><tr>
+                                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-700">Datum</th>
+                                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-700">Mitglied</th>
+                                            <th class="px-4 py-2 text-left text-sm font-semibold text-gray-700">Zweck</th>
+                                            <th class="px-4 py-2 text-right text-sm font-semibold text-gray-700">Betrag</th>
+                                            <th class="px-4 py-2 text-right text-sm font-semibold text-gray-700">Erfasst am</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-gray-100">
+                                            ${state.einzahlungen.map(e => `
+                                                <tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-2 text-sm">${e.datum}</td>
+                                                    <td class="px-4 py-2 text-sm font-medium">${e.mitglied}</td>
+                                                    <td class="px-4 py-2 text-sm text-gray-600">${e.zweck}</td>
+                                                    <td class="px-4 py-2 text-sm text-right font-semibold text-green-600">+${parseFloat(e.betrag).toFixed(2)} €</td>
+                                                    <td class="px-4 py-2 text-sm text-right text-gray-400">${new Date(e.erfasstAm).toLocaleDateString('de-DE')}</td>
+                                                </tr>`).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>` : ''}
+                        <div class="bg-white rounded-lg shadow overflow-hidden">
+                            <div class="p-6">
+                                <h2 class="text-xl font-bold text-gray-800 mb-4">Alle Auslagen</h2>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                                    <input type="text" id="filter-mitglied" placeholder="🔍 Mitglied suchen..."
+                                        value="${state.filter.mitglied}"
+                                        oninput="state.filter.mitglied = this.value; debounceRender();"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none" />
+                                    <select onchange="state.filter.status = this.value; debounceRender(0);"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none">
+                                        <option value="" ${state.filter.status === '' ? 'selected' : ''}>Alle Status</option>
+                                        <option value="offen" ${state.filter.status === 'offen' ? 'selected' : ''}>⏳ Offen</option>
+                                        <option value="bezahlt" ${state.filter.status === 'bezahlt' ? 'selected' : ''}>✅ Bezahlt</option>
+                                        <option value="geloescht" ${state.filter.status === 'geloescht' ? 'selected' : ''}>🗑️ Gelöscht</option>
+                                    </select>
+                                    <select onchange="state.filter.kategorie = this.value; debounceRender(0);"
+                                        class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-verein-pink focus:outline-none">
+                                        <option value="" ${state.filter.kategorie === '' ? 'selected' : ''}>Alle Kategorien</option>
+                                        ${state.kategorien.map(kat => `<option value="${kat}" ${state.filter.kategorie === kat ? 'selected' : ''}>${kat}</option>`).join('')}
+                                    </select>
+                                </div>
+                                ${(() => {
+                                    const statusOrder = { 'offen': 0, 'bezahlt': 1 };
+                                    const gefiltert = state.auslagen.filter(a => {
+                                        if (state.filter.mitglied !== '' && !a.mitglied.toLowerCase().includes(state.filter.mitglied.toLowerCase())) return false;
+                                        if (state.filter.kategorie !== '' && a.kategorie !== state.filter.kategorie) return false;
+                                        if (state.filter.status === 'geloescht') return !!a.geloescht;
+                                        if (state.filter.status !== '') return !a.geloescht && a.status === state.filter.status;
+                                        return true;
+                                    }).sort((a, b) => {
+                                        const rankA = a.geloescht ? 2 : (statusOrder[a.status] ?? 1);
+                                        const rankB = b.geloescht ? 2 : (statusOrder[b.status] ?? 1);
+                                        if (rankA !== rankB) return rankA - rankB;
+                                        return b.id - a.id;
+                                    });
+                                    if (state.auslagen.length === 0) return '<p class="text-gray-500 text-center py-8">Noch keine Auslagen vorhanden</p>';
+                                    if (gefiltert.length === 0) return '<p class="text-gray-500 text-center py-8">Keine Auslagen für diesen Filter gefunden</p>';
+                                    return `<div class="overflow-x-auto"><table class="w-full">
+                                        <thead class="bg-gray-50"><tr>
+                                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Datum</th>
+                                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Mitglied</th>
+                                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Zweck</th>
+                                            <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">Kategorie</th>
+                                            <th class="px-4 py-3 text-right text-sm font-semibold text-gray-700">Betrag</th>
+                                            <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Beleg</th>
+                                            <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Status</th>
+                                            <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">Aktionen</th>
+                                        </tr></thead>
+                                        <tbody class="divide-y divide-gray-200">
+                                            ${gefiltert.map(a => {
+                                                if (a.geloescht) {
+                                                    const wann = a.geloeschtAm ? new Date(a.geloeschtAm).toLocaleDateString('de-DE') : '–';
+                                                    return `<tr class="bg-gray-50 opacity-60">
+                                                        <td class="px-4 py-3 text-sm text-gray-400 line-through">${a.datum}</td>
+                                                        <td class="px-4 py-3 text-sm text-gray-400 line-through">${a.mitglied}</td>
+                                                        <td class="px-4 py-3 text-sm text-gray-400 line-through">${a.zweck}</td>
+                                                        <td class="px-4 py-3 text-sm text-gray-400 line-through">${a.kategorie}</td>
+                                                        <td class="px-4 py-3 text-sm text-right text-gray-400 line-through">${a.betrag.toFixed(2)} €</td>
+                                                        <td class="px-4 py-3 text-center">${getBelege(a.beleg).length > 0 ? `<button onclick="viewBeleg(${a.id})" class="text-gray-400 text-sm">📎 ${getBelege(a.beleg).length > 1 ? getBelege(a.beleg).length : ''}</button>` : '-'}</td>
+                                                        <td class="px-4 py-3 text-center">
+                                                            <span class="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-500">🗑️ Gelöscht ${wann}</span>
+                                                        </td>
+                                                        <td class="px-4 py-3 text-center text-gray-400 text-xs">–</td>
+                                                    </tr>`;
+                                                }
+                                                return `<tr class="hover:bg-gray-50">
+                                                    <td class="px-4 py-3 text-sm">${a.datum}</td>
+                                                    <td class="px-4 py-3 text-sm font-medium">${a.mitglied}</td>
+                                                    <td class="px-4 py-3 text-sm">${a.zweck}</td>
+                                                    <td class="px-4 py-3 text-sm text-gray-500">${a.kategorie}</td>
+                                                    <td class="px-4 py-3 text-sm text-right font-semibold">${a.betrag.toFixed(2)} €</td>
+                                                    <td class="px-4 py-3 text-center">${getBelege(a.beleg).length > 0 ? `<button onclick="viewBeleg(${a.id})" class="text-verein-pink hover:text-verein-pink-dark text-sm">📎 ${getBelege(a.beleg).length > 1 ? getBelege(a.beleg).length + ' Fotos' : 'Ansehen'}</button>` : '-'}</td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-medium ${a.status === 'offen' ? 'bg-verein-cyan-light text-verein-cyan' : 'bg-green-100 text-green-700'}">${a.status}</span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center">
+                                                        <div class="flex gap-1 justify-center flex-wrap">
+                                                            ${a.status === 'offen' ? `<button onclick="updateStatus(${a.id}, 'bezahlt')" class="px-2 py-1 bg-green-500 text-white text-xs rounded hover:bg-green-600">💰 Bezahlen</button>` : ''}
+                                                            <button onclick="openEditModal(${a.id})" class="px-2 py-1 bg-yellow-100 text-yellow-700 text-xs rounded hover:bg-yellow-200">✏️</button>
+                                                            <button onclick="deleteAuslage(${a.id})" class="px-2 py-1 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200">🗑️</button>
+                                                        </div>
+                                                    </td>
+                                                </tr>`;
+                                            }).join('')}
+                                        </tbody>
+                                    </table></div>`;
+                                })()}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        }
+
+        // --- Main Render ---
+        function render() {
+            const scrollPos = window.scrollY;
+            const activeEl = document.activeElement;
+            const activeId = activeEl ? activeEl.id : null;
+            const cursorPos = activeEl && activeEl.selectionStart !== undefined ? activeEl.selectionStart : null;
+            const app = document.getElementById('app');
+            if (!state.currentUser) {
+                app.innerHTML = renderLogin() + renderToast();
+            } else if (state.view === 'neue-auslage') {
+                app.innerHTML = renderNeueAuslage() + renderEditModal() + renderBelegOverlay() + renderToast();
+            } else if (state.view === 'meine-auslagen') {
+                app.innerHTML = renderMeineAuslagen() + renderEditModal() + renderBelegOverlay() + renderToast();
+            } else if (state.view === 'dashboard') {
+                app.innerHTML = renderDashboard() + renderModal() + renderReportModal() + renderKategorienModal() + renderEditModal() + renderBelegOverlay() + renderKassensturzModal() + renderAuslageModal() + renderImportModal() + renderPanelModal() + renderNutzerModal() + renderMassenModal() + renderEinzahlungModal() + renderLoading() + renderToast();
+            }
+            setTimeout(() => {
+                window.scrollTo(0, scrollPos);
+                if (activeId) {
+                    const el = document.getElementById(activeId);
+                    if (el) { el.focus(); if (cursorPos !== null && el.setSelectionRange) el.setSelectionRange(cursorPos, cursorPos); }
+                }
+            }, 0);
+        }
+
+        // --- Start ---
+        loadData();
+    </script>
+</body>
+</html>
