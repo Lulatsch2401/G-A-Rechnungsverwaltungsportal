@@ -1,0 +1,618 @@
+<title>Auslagen-Handbuch G&A</title>
+<meta name="description" content="Technische Dokumentation der Auslagen-Verwaltung von Gut und Aussehend: Funktionen, Datenmodell, API und Betrieb.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root{
+    --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eaeff2; --ink:#0a1929; --ink-2:#4a5b6b;
+    --border:#d5dee3; --accent:#e91e7e; --accent-ink:#bd1560; --cyan:#4fd9d9; --cyan-ink:#0c6570;
+    --good:#2e8b57; --good-bg:#e5f2ea; --warn:#a5620a; --warn-bg:#f6ecdd; --danger:#c22f49; --danger-bg:#f7e5e8;
+    --shadow:0 1px 2px rgba(10,25,41,.06),0 8px 24px -12px rgba(10,25,41,.14);
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#07131e; --surface:#0d2130; --surface-2:#122736; --ink:#e6edf1; --ink-2:#96abb9;
+      --border:#213a4c; --accent:#ff53a2; --accent-ink:#ff8ac2; --cyan:#57dede; --cyan-ink:#63dede;
+      --good:#54b881; --good-bg:#0f2b21; --warn:#e0a24a; --warn-bg:#2e2314; --danger:#f2647e; --danger-bg:#331820;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.55);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#07131e; --surface:#0d2130; --surface-2:#122736; --ink:#e6edf1; --ink-2:#96abb9;
+    --border:#213a4c; --accent:#ff53a2; --accent-ink:#ff8ac2; --cyan:#57dede; --cyan-ink:#63dede;
+    --good:#54b881; --good-bg:#0f2b21; --warn:#e0a24a; --warn-bg:#2e2314; --danger:#f2647e; --danger-bg:#331820;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px -14px rgba(0,0,0,.55);
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:16px; line-height:1.62; margin:0;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:1060px; margin:0 auto; padding:0 24px 96px}
+  .prose{max-width:72ch}
+
+  h1,h2,h3{font-family:"Bricolage Grotesque","Segoe UI",system-ui,sans-serif; line-height:1.12; text-wrap:balance; margin:0}
+  h2{font-size:clamp(1.55rem,1.1rem + 1.7vw,2.15rem); font-weight:700; letter-spacing:-.01em}
+  h3{font-size:1.16rem; font-weight:700; margin-top:2.2em}
+  p{margin:0 0 1em}
+  a{color:var(--accent-ink); text-underline-offset:3px; text-decoration-thickness:1px}
+  a:hover{text-decoration-color:var(--accent)}
+  strong{font-weight:600}
+  code,kbd,.mono{font-family:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace}
+  code{background:var(--surface-2); padding:.1em .4em; border-radius:4px; font-size:.86em}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px}
+
+  /* Header */
+  header.masthead{padding:64px 0 30px; border-bottom:2px solid var(--accent)}
+  .eyebrow{font-family:"IBM Plex Mono",monospace; font-size:.74rem; letter-spacing:.16em; text-transform:uppercase; color:var(--accent-ink); margin:0 0 14px}
+  header.masthead h1{font-family:"Bricolage Grotesque",system-ui,sans-serif; font-weight:800; font-size:clamp(2.1rem,1.4rem + 3vw,3.4rem); letter-spacing:-.02em}
+  header.masthead .lede{max-width:60ch; color:var(--ink-2); font-size:1.05rem; margin:.7em 0 0}
+  .meta{margin-top:22px; font-family:"IBM Plex Mono",monospace; font-size:.78rem; color:var(--ink-2); display:flex; flex-wrap:wrap; gap:6px 18px}
+
+  /* TOC */
+  nav.toc{margin:38px 0 8px; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:22px 24px; box-shadow:var(--shadow)}
+  nav.toc p{font-family:"Bricolage Grotesque",system-ui,sans-serif; font-weight:700; margin:0 0 12px; font-size:.95rem}
+  nav.toc ol{margin:0; padding:0; list-style:none; columns:2; column-gap:40px}
+  nav.toc li{break-inside:avoid; margin:0 0 7px; font-size:.93rem}
+  nav.toc li a{color:var(--ink); text-decoration:none; display:flex; gap:10px}
+  nav.toc li a:hover{color:var(--accent-ink)}
+  nav.toc li span{font-family:"IBM Plex Mono",monospace; color:var(--accent-ink); font-size:.82em; flex:none}
+  @media (max-width:620px){nav.toc ol{columns:1}}
+
+  section{margin-top:64px; scroll-margin-top:20px}
+  .secthead{display:flex; align-items:baseline; gap:14px; margin-bottom:20px}
+  .secthead .no{font-family:"IBM Plex Mono",monospace; color:var(--accent-ink); font-size:1rem; font-weight:500; flex:none}
+
+  ul.clean{margin:0 0 1em; padding-left:1.25em}
+  ul.clean li{margin:.35em 0}
+  dl.kv{margin:1em 0; display:grid; grid-template-columns:max-content 1fr; gap:.4em 1.2em}
+  dl.kv dt{font-weight:600}
+  dl.kv dd{margin:0; color:var(--ink-2)}
+
+  /* Tables */
+  .tablewrap{overflow-x:auto; margin:22px 0; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow)}
+  table{border-collapse:collapse; width:100%; font-size:.9rem; background:var(--surface)}
+  th,td{text-align:left; padding:11px 15px; border-bottom:1px solid var(--border); vertical-align:top}
+  thead th{background:var(--surface-2); font-weight:600; font-family:"Bricolage Grotesque",system-ui,sans-serif; white-space:nowrap; font-size:.82rem; letter-spacing:.01em}
+  tbody tr:last-child td{border-bottom:0}
+  td.mono,th.mono{font-family:"IBM Plex Mono",monospace; font-size:.84rem; white-space:nowrap}
+  .num{font-variant-numeric:tabular-nums; text-align:right}
+  .tag{display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:.72rem; padding:.15em .5em; border-radius:5px; border:1px solid var(--border); background:var(--surface-2); color:var(--ink-2); white-space:nowrap}
+  .tag.kw{color:var(--accent-ink); border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+  .tag.pub{color:var(--good); border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+  .yes{color:var(--good); font-weight:600}
+  .no{color:var(--ink-2)}
+
+  /* Callouts */
+  .note{margin:22px 0; padding:16px 18px 16px 20px; border-left:3px solid var(--cyan-ink); background:var(--surface); border-radius:0 10px 10px 0; box-shadow:var(--shadow)}
+  .note.warn{border-left-color:var(--warn); background:var(--warn-bg)}
+  .note.danger{border-left-color:var(--danger); background:var(--danger-bg)}
+  .note .t{font-family:"Bricolage Grotesque",system-ui,sans-serif; font-weight:700; font-size:.9rem; letter-spacing:.02em; margin:0 0 6px; text-transform:uppercase}
+  .note.warn .t{color:var(--warn)} .note.danger .t{color:var(--danger)} .note .t{color:var(--cyan-ink)}
+  .note p:last-child{margin-bottom:0}
+  .note code{background:color-mix(in srgb,var(--ink) 8%,transparent)}
+
+  /* Figures */
+  figure{margin:30px 0; background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px 22px 16px; box-shadow:var(--shadow)}
+  figure svg{display:block; width:100%; height:auto; color:var(--ink); font-family:"IBM Plex Sans",sans-serif}
+  figcaption{margin-top:14px; font-size:.85rem; color:var(--ink-2); max-width:70ch}
+  figcaption b{color:var(--ink); font-weight:600}
+
+  footer{margin-top:80px; padding-top:28px; border-top:1px solid var(--border); font-size:.85rem; color:var(--ink-2); max-width:72ch}
+
+  @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
+</style>
+
+<div class="page">
+
+<header class="masthead">
+  <p class="eyebrow">Technische Dokumentation · Version 2.0.0</p>
+  <h1>Auslagen-Verwaltung G&amp;A</h1>
+  <p class="lede">Wie das Auslagen- und Kassenportal von <em>Gut und Aussehend</em> aufgebaut ist, was es kann und wie es betrieben wird — für Kassenwart, Vorstand und alle, die den Code pflegen.</p>
+  <div class="meta">
+    <span>Quelle: server.js · public/index.html</span>
+    <span>Commit eb660a6</span>
+    <span>Stand: 8. September 2026</span>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Inhalt">
+  <p>Inhalt</p>
+  <ol>
+    <li><a href="#ueberblick"><span>§1</span> Überblick</a></li>
+    <li><a href="#rollen"><span>§2</span> Rollen &amp; Rechte</a></li>
+    <li><a href="#architektur"><span>§3</span> Architektur &amp; Projektdateien</a></li>
+    <li><a href="#datenmodell"><span>§4</span> Datenmodell</a></li>
+    <li><a href="#anmeldung"><span>§5</span> Anmeldung &amp; Sitzungen</a></li>
+    <li><a href="#mitglied"><span>§6</span> Funktionen für Mitglieder</a></li>
+    <li><a href="#kassenwart"><span>§7</span> Funktionen für den Kassenwart</a></li>
+    <li><a href="#kassenbestand"><span>§8</span> Kassenbestand-Berechnung</a></li>
+    <li><a href="#kassensturz"><span>§9</span> Kassensturz</a></li>
+    <li><a href="#betrieb"><span>§10</span> Datensicherung &amp; Betrieb</a></li>
+    <li><a href="#grenzen"><span>§11</span> Bekannte Einschränkungen</a></li>
+    <li><a href="#codeindex"><span>§12</span> Funktionsübersicht (Code)</a></li>
+  </ol>
+</nav>
+
+<!-- 1 -->
+<section id="ueberblick">
+  <div class="secthead"><span class="no">§1</span><h2>Überblick</h2></div>
+  <div class="prose">
+    <p>Die Auslagen-Verwaltung ist eine kleine Webanwendung, mit der Vereinsmitglieder ihre verauslagten Beträge (mit Belegfoto) einreichen und der Kassenwart sie prüft, auszahlt und die Vereinskasse führt. Sie ersetzt die frühere Zettel- und Tabellen-Lösung.</p>
+    <h3>Technik in einem Satz</h3>
+    <p>Ein einzelner <strong>Node.js-Server</strong> (<code>server.js</code>, Express) liefert eine <strong>Single-Page-App</strong> aus reinem HTML/JavaScript aus (<code>public/index.html</code>, Tailwind per CDN) und speichert alles in einer <strong>SQLite-Datei</strong> (<code>auslagen.db</code>). Kein Build-Schritt, keine weiteren Dienste.</p>
+    <dl class="kv">
+      <dt>Laufzeit</dt><dd>Node.js, Express 4, sqlite3</dd>
+      <dt>Port</dt><dd>3000 (<code>http://localhost:3000</code>)</dd>
+      <dt>Server-Prozess</dt><dd>pm2-Prozess <code>auslagen-v2</code> auf einem Raspberry Pi</dd>
+      <dt>Datenbank</dt><dd>SQLite-Datei neben <code>server.js</code>, wird beim ersten Start selbst angelegt</dd>
+      <dt>Sicherung</dt><dd>nächtlicher Cron-Job → lokale <code>.db</code>-Kopie + Upload nach Google Drive (rclone)</dd>
+      <dt>Anmeldung</dt><dd>Benutzername; Passwort nur für den Kassenwart</dd>
+    </dl>
+    <h3>Die zwei Rollen</h3>
+    <ul class="clean">
+      <li><strong>Mitglied</strong> — reicht eigene Auslagen ein, sieht und bearbeitet nur die eigenen, solange sie „offen“ sind.</li>
+      <li><strong>Kassenwart</strong> — sieht alles, zahlt aus, bucht Einzahlungen, verwaltet Mitglieder, Kategorien und Backups und macht den Kassensturz.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 2 -->
+<section id="rollen">
+  <div class="secthead"><span class="no">§2</span><h2>Rollen &amp; Rechte</h2></div>
+  <div class="prose"><p>Der Server unterscheidet die Rollen über zwei Wächter: <code>requireAuth</code> (gültige Sitzung nötig) und <code>requireKassenwart</code> (Rolle muss <code>kassenwart</code> sein). Einige Rechte werden zusätzlich nur im Browser durchgesetzt — siehe <a href="#grenzen">§11</a>.</p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Aktion</th><th>Mitglied</th><th>Kassenwart</th></tr></thead>
+      <tbody>
+        <tr><td>Anmelden</td><td>nur Benutzername</td><td>Benutzername + Passwort</td></tr>
+        <tr><td>Auslage anlegen</td><td class="yes">eigene</td><td class="yes">auch für andere Mitglieder</td></tr>
+        <tr><td>Fremde Auslagen sehen</td><td class="no">nein</td><td class="yes">alle</td></tr>
+        <tr><td>Auslage bearbeiten</td><td>nur eigene, nur Status „offen“</td><td class="yes">alle</td></tr>
+        <tr><td>Auslage löschen</td><td>nur eigene, nur „offen“</td><td class="yes">alle (auch „bezahlt“)</td></tr>
+        <tr><td>Gelöschte Einträge sehen</td><td class="no">nein</td><td class="yes">ja (zur Nachvollziehbarkeit)</td></tr>
+        <tr><td>Als „bezahlt“ markieren</td><td class="no">nein</td><td class="yes">ja</td></tr>
+        <tr><td>Einzahlung buchen</td><td class="no">nein</td><td class="yes">ja</td></tr>
+        <tr><td>Massenerfassung, CSV-Import</td><td class="no">nein</td><td class="yes">ja</td></tr>
+        <tr><td>Kategorien &amp; Nutzer verwalten</td><td class="no">nein</td><td class="yes">ja</td></tr>
+        <tr><td>Reports, Backups, Kassensturz</td><td class="no">nein</td><td class="yes">ja</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="architektur">
+  <div class="secthead"><span class="no">§3</span><h2>Architektur &amp; Projektdateien</h2></div>
+
+  <figure>
+    <svg viewBox="0 0 920 250" role="img" aria-label="Der Browser schickt jede Anfrage mit einem Bearer-Token an server.js; der Server prüft das Token gegen eine Map im Arbeitsspeicher und spricht dann SQLite an.">
+      <defs><marker id="ar3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <rect x="16" y="66" width="238" height="118" rx="8" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="135" y="94" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">Browser</text>
+      <text x="135" y="118" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">public/index.html</text>
+      <text x="135" y="136" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">Vanilla-JS-SPA</text>
+      <text x="135" y="154" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">localStorage: authToken</text>
+
+      <line x1="254" y1="125" x2="366" y2="125" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar3)"/>
+      <text x="310" y="115" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".75">Anfrage + Token</text>
+
+      <rect x="368" y="46" width="288" height="158" rx="8" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="512" y="74" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">server.js</text>
+      <text x="512" y="98" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".72">Express · Port 3000</text>
+      <text x="512" y="118" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".72">liefert /public statisch aus</text>
+      <text x="512" y="146" text-anchor="middle" font-size="11.5" fill="var(--accent-ink)">sessions: Map im RAM · TTL 8 h</text>
+      <text x="512" y="166" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".72">requireAuth / requireKassenwart</text>
+
+      <line x1="656" y1="125" x2="768" y2="125" stroke="currentColor" stroke-width="1.6" marker-end="url(#ar3)"/>
+      <text x="712" y="115" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".75">SQL</text>
+
+      <rect x="770" y="66" width="134" height="118" rx="8" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="837" y="112" text-anchor="middle" font-size="13.5" font-weight="600" fill="currentColor">auslagen.db</text>
+      <text x="837" y="134" text-anchor="middle" font-size="11.5" fill="currentColor" opacity=".7">SQLite · 5 Tabellen</text>
+    </svg>
+    <figcaption><b>Ein Prozess, ein File.</b> Es gibt keine Datenbank­verbindung von außen und keinen zweiten Server. Der Token, an dem jede API-Antwort hängt, lebt nur im Arbeitsspeicher des Node-Prozesses — startet er neu, sind alle abgemeldet.</figcaption>
+  </figure>
+
+  <div class="prose"><h3>Dateien im Repository</h3></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="mono">Pfad</th><th>Inhalt</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">server.js</td><td>Kompletter Server: Auth, alle API-Routen, SQLite-Schema &amp; Migrationen, CSV-Bau, Google-Drive-Export</td></tr>
+        <tr><td class="mono">public/index.html</td><td>Die komplette App — Zustand, Rendering und alle Funktionen in einer Datei (~2250 Zeilen, kein Framework)</td></tr>
+        <tr><td class="mono">public/logo.png<br>public/favicon.*</td><td>Vereinslogo und Favicon</td></tr>
+        <tr><td class="mono">package.json</td><td>Abhängigkeiten: <code>express</code>, <code>sqlite3</code></td></tr>
+        <tr><td class="mono">deploy.sh</td><td>Auf dem Pi: <code>git pull</code> → <code>npm install --omit=dev</code> → <code>pm2 restart auslagen-v2</code></td></tr>
+        <tr><td class="mono">.gitignore</td><td>Schließt <code>node_modules/</code>, <code>auslagen.db</code>, <code>backups/</code> aus</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="note">
+    <p class="t">Gut zu wissen</p>
+    <p>Das Sicherungsskript <code>backup-auslagen.sh</code> und der rclone-Remote <code>gdrive:</code> liegen <strong>nur auf dem Pi</strong>, nicht im Repository. Die Pfade <code>/home/pi/backups/</code> sind in <code>server.js</code> fest verdrahtet — deshalb funktionieren Cloud-Export und Kassensturz-Upload nur dort, nicht lokal.</p>
+  </div>
+</section>
+
+<!-- 4 -->
+<section id="datenmodell">
+  <div class="secthead"><span class="no">§4</span><h2>Datenmodell</h2></div>
+  <div class="prose"><p>Fünf Tabellen, alle beim ersten Start automatisch angelegt. Die Standard­kategorien und die Mitglieder aus der Liste in <code>server.js</code> werden dabei mit <code>INSERT OR IGNORE</code> eingespielt.</p></div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="mono">auslagen</th><th>Typ</th><th>Bedeutung</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">id</td><td>INTEGER</td><td>Primärschlüssel</td></tr>
+        <tr><td class="mono">mitglied</td><td>TEXT</td><td>Klarname, für den die Auslage läuft</td></tr>
+        <tr><td class="mono">betrag</td><td>REAL</td><td>Euro; negative Werte erlaubt (Warnhinweis im Formular)</td></tr>
+        <tr><td class="mono">datum</td><td>TEXT</td><td>Beleg­datum (<code>JJJJ-MM-TT</code>)</td></tr>
+        <tr><td class="mono">zweck</td><td>TEXT</td><td>Freitext</td></tr>
+        <tr><td class="mono">kategorie</td><td>TEXT</td><td>Name aus <code>kategorien</code></td></tr>
+        <tr><td class="mono">beleg</td><td>TEXT</td><td>JSON-Array mit Base64-Bildern (data-URI), von der App vor dem Upload verkleinert</td></tr>
+        <tr><td class="mono">status</td><td>TEXT</td><td><code>offen</code> (Standard) oder <code>bezahlt</code></td></tr>
+        <tr><td class="mono">eingereichtAm</td><td>TEXT</td><td>ISO-Zeitstempel der Erfassung</td></tr>
+        <tr><td class="mono">bezahltAm</td><td>TEXT</td><td>gesetzt, sobald auf „bezahlt“ gestellt</td></tr>
+        <tr><td class="mono">historie</td><td>TEXT</td><td>JSON-Array: <code>{zeitpunkt, aktion, benutzer, aenderungen?}</code></td></tr>
+        <tr><td class="mono">geloescht</td><td>INTEGER</td><td>Soft-Delete-Flag (0/1)</td></tr>
+        <tr><td class="mono">geloeschtAm</td><td>TEXT</td><td>Zeitpunkt des Löschens</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th class="mono">Tabelle</th><th>Spalten</th><th>Zweck</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">einzahlungen</td><td class="mono">id, mitglied, betrag, datum, zweck, erfasstAm</td><td>Protokoll aller Einzahlungen in die Kasse; jede erhöht zugleich <code>kassenbestand</code></td></tr>
+        <tr><td class="mono">kategorien</td><td class="mono">id, name (UNIQUE)</td><td>Auswahlliste. Standard: Kostüme, Gestaltung, Allgemeines, Bauen, Altstadttanz, Weihnachtsfeier, Verpflegung bauen, Wurfmaterial/Getränke, Technik</td></tr>
+        <tr><td class="mono">mitglieder</td><td class="mono">username (PK), name, gesperrt</td><td>Login-Namen; <code>gesperrt = 1</code> verhindert Anmeldung</td></tr>
+        <tr><td class="mono">einstellungen</td><td class="mono">schluessel (PK), wert</td><td>Aktuell nur <code>kassenbestand</code> (Standard 5000)</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 5 -->
+<section id="anmeldung">
+  <div class="secthead"><span class="no">§5</span><h2>Anmeldung &amp; Sitzungen</h2></div>
+
+  <figure>
+    <svg viewBox="0 0 860 520" role="img" aria-label="Ablauf der Anmeldung: Formular, POST an /api/login, Rollenprüfung für Kassenwart oder Mitglied, Token in der Session-Map und im localStorage, dann rollenabhängige Startansicht. Ein Serverneustart leert die Map.">
+      <defs><marker id="ar5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-size="12.5" fill="currentColor">
+        <rect x="120" y="16" width="420" height="44" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="43" text-anchor="middle">Login-Formular: Benutzername (+ Passwort)</text>
+        <line x1="330" y1="60" x2="330" y2="84" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+        <rect x="120" y="86" width="420" height="44" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="113" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="12">POST /api/login</text>
+        <line x1="330" y1="130" x2="330" y2="154" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+        <rect x="120" y="156" width="420" height="104" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="182" text-anchor="middle" font-weight="600">Rollenprüfung</text>
+        <text x="330" y="205" text-anchor="middle" font-size="11.5" opacity=".78">username = „kassenwart“ → Passwort muss stimmen, sonst 401</text>
+        <text x="330" y="224" text-anchor="middle" font-size="11.5" opacity=".78">sonst → in Tabelle mitglieder? nein → 401</text>
+        <text x="330" y="243" text-anchor="middle" font-size="11.5" opacity=".78">gesperrt = 1 → 403</text>
+        <line x1="330" y1="260" x2="330" y2="284" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+        <rect x="120" y="286" width="420" height="60" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="311" text-anchor="middle">Sitzung anlegen: UUID-Token</text>
+        <text x="330" y="331" text-anchor="middle" font-size="11.5" fill="var(--accent-ink)">→ sessions-Map (RAM, TTL 8 h)</text>
+        <line x1="330" y1="346" x2="330" y2="370" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+        <rect x="120" y="372" width="420" height="44" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="399" text-anchor="middle">Client legt Token in localStorage ab</text>
+        <line x1="330" y1="416" x2="330" y2="440" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar5)"/>
+
+        <rect x="120" y="442" width="420" height="58" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="330" y="466" text-anchor="middle">Startansicht nach Rolle</text>
+        <text x="330" y="486" text-anchor="middle" font-size="11.5" opacity=".78">Kassenwart → Dashboard · Mitglied → Meine Auslagen</text>
+
+        <line x1="540" y1="316" x2="592" y2="316" stroke="var(--accent)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar5)"/>
+        <rect x="594" y="284" width="252" height="64" rx="7" fill="none" stroke="var(--accent)" stroke-dasharray="4 3"/>
+        <text x="720" y="309" text-anchor="middle" font-size="11" fill="var(--accent-ink)">pm2 restart / Absturz →</text>
+        <text x="720" y="327" text-anchor="middle" font-size="11" fill="var(--accent-ink)">Map leer → nächste Anfrage 401</text>
+        <text x="720" y="341" text-anchor="middle" font-size="11" fill="var(--accent-ink)">→ zurück zum Login</text>
+      </g>
+    </svg>
+    <figcaption><b>Sitzungen liegen nur im Arbeitsspeicher.</b> Jedes Deployment über <code>deploy.sh</code> startet den pm2-Prozess neu und meldet damit alle Nutzer ab — das ist normal, kein Fehler. Der Client merkt es an der ersten <code>401</code>-Antwort und zeigt wieder das Login.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <dl class="kv">
+      <dt>Kassenwart-Login</dt><dd>Benutzername <code>kassenwart</code>, Passwort <code>Gut-Aussehend</code> (Konstante <code>KASSENWART_PASSWORT</code> in <code>server.js</code>)</dd>
+      <dt>Mitglied-Login</dt><dd>nur der Benutzername, z.&nbsp;B. <code>lfucke</code> — kein Passwort</dd>
+      <dt>Token</dt><dd><code>crypto.randomUUID()</code>, im Header <code>Authorization: Bearer &lt;token&gt;</code></dd>
+      <dt>Ablauf</dt><dd>8 Stunden; abgelaufene Sitzungen werden stündlich aus der Map entfernt</dd>
+      <dt>Sperren / Löschen</dt><dd>beendet sofort alle aktiven Sitzungen dieses Nutzers</dd>
+    </dl>
+  </div>
+</section>
+
+<!-- 6 -->
+<section id="mitglied">
+  <div class="secthead"><span class="no">§6</span><h2>Funktionen für Mitglieder</h2></div>
+  <div class="prose">
+    <h3>Meine Auslagen</h3>
+    <p>Startansicht für Mitglieder. Drei Kacheln (Offen / Bezahlt / Anzahl) und darunter die eigenen Einträge, neueste zuerst. Belegfotos werden als Vorschau gezeigt und öffnen per Klick die Großansicht. Bei „offenen“ Einträgen erscheinen <em>Bearbeiten</em> und <em>Löschen</em>.</p>
+
+    <h3>Neue Auslage</h3>
+    <p>Formular mit Betrag, Datum, Kategorie, Zweck und Belegfotos. Fotos werden <strong>im Browser</strong> auf max. 800&nbsp;px Breite verkleinert und als JPEG (Qualität 0,7) gespeichert — das hält die Datenbank klein. Mehrere Fotos pro Auslage sind möglich. Ein negativer Betrag löst eine Rückfrage-Warnung aus, ist aber erlaubt (z.&nbsp;B. für Rückzahlungen).</p>
+
+    <h3>Bearbeiten</h3>
+    <p>Nur eigene Auslagen und nur solange „offen“. Jede geänderte Zeile (Betrag, Datum, Zweck, Kategorie) wird mit Vorher/Nachher in die <code>historie</code> geschrieben und ist später im Bearbeiten-Dialog als Änderungs­protokoll sichtbar.</p>
+
+    <h3>Löschen</h3>
+    <p>Kein echtes Löschen: Der Eintrag bekommt <code>geloescht = 1</code> und verschwindet aus der Mitglieder-Ansicht. Der Kassenwart sieht ihn weiterhin (durchgestrichen, mit Löschdatum). Mitglieder können nur eigene „offene“ Auslagen löschen.</p>
+  </div>
+
+  <figure>
+    <svg viewBox="0 0 820 300" role="img" aria-label="Zustände einer Auslage: von neu zu offen, von offen zu bezahlt durch den Kassenwart, von offen oder bezahlt zu gelöscht. Gelöschte Einträge bleiben für den Kassenwart sichtbar.">
+      <defs><marker id="ar6" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+      <marker id="ar6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--accent)"/></marker></defs>
+      <circle cx="52" cy="150" r="5" fill="currentColor"/>
+      <text x="52" y="130" text-anchor="middle" font-size="11" fill="currentColor" opacity=".7">neu</text>
+      <line x1="60" y1="150" x2="126" y2="150" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar6)"/>
+      <text x="95" y="140" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">einreichen</text>
+
+      <rect x="128" y="120" width="150" height="60" rx="8" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="203" y="155" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">offen</text>
+
+      <path d="M278 138 C 350 96, 380 78, 452 78" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar6)"/>
+      <text x="360" y="86" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".8">Kassenwart: „Bezahlen“</text>
+
+      <rect x="454" y="52" width="150" height="56" rx="8" fill="var(--surface-2)" stroke="var(--border)"/>
+      <text x="529" y="86" text-anchor="middle" font-size="14" font-weight="600" fill="currentColor">bezahlt</text>
+
+      <path d="M278 164 C 350 206, 380 220, 452 220" fill="none" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#ar6a)"/>
+      <text x="356" y="216" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)">Mitglied* oder Kassenwart</text>
+
+      <line x1="529" y1="108" x2="529" y2="188" stroke="var(--accent)" stroke-width="1.5" marker-end="url(#ar6a)"/>
+      <text x="539" y="152" font-size="10.5" fill="var(--accent-ink)">nur Kassenwart</text>
+
+      <rect x="454" y="190" width="150" height="56" rx="8" fill="none" stroke="var(--accent)"/>
+      <text x="529" y="217" text-anchor="middle" font-size="13.5" font-weight="600" fill="var(--accent-ink)">gelöscht</text>
+      <text x="529" y="234" text-anchor="middle" font-size="10" fill="var(--accent-ink)">geloescht = 1</text>
+
+      <path d="M150 120 C 150 92, 256 92, 256 118" fill="none" stroke="currentColor" stroke-width="1.4" marker-end="url(#ar6)"/>
+      <text x="203" y="86" text-anchor="middle" font-size="10.5" fill="currentColor" opacity=".7">Bearbeiten (→ historie)</text>
+
+      <text x="128" y="284" font-size="10.5" fill="currentColor" opacity=".65">* Mitglied nur eigene Einträge, nur solange „offen“. Mitglieder sehen gelöschte Einträge nicht mehr.</text>
+    </svg>
+    <figcaption><b>„Bezahlt“ und „gelöscht“ sind Einbahnstraßen.</b> Es gibt in der App keinen Knopf, um einen bezahlten Eintrag wieder zu öffnen oder einen gelöschten wiederherzustellen — das ginge nur direkt in der Datenbank.</figcaption>
+  </figure>
+</section>
+
+<!-- 7 -->
+<section id="kassenwart">
+  <div class="secthead"><span class="no">§7</span><h2>Funktionen für den Kassenwart</h2></div>
+  <div class="prose">
+    <h3>Dashboard</h3>
+    <p>Drei anklickbare Kennzahl-Kacheln (Offen / Bezahlt / Anzahl aktiver Auslagen) öffnen je eine Aufschlüsselung nach Mitglied. Darunter zwei Kassen-Kacheln (siehe <a href="#kassenbestand">§8</a>), die Tabelle „Auszahlungen je Mitglied“, optional das Einzahlungs­protokoll und schließlich „Alle Auslagen“ mit Filtern nach Mitglied, Status (inkl. <em>gelöscht</em>) und Kategorie.</p>
+
+    <h3>Auszahlen</h3>
+    <p>In „Auszahlungen je Mitglied“ auf eine Zeile klicken → Dialog mit allen offenen Belegen dieses Mitglieds. Gewünschte auswählen, Summe wird live berechnet, „Bezahlen“ setzt alle ausgewählten in einem Rutsch auf <code>bezahlt</code>. Alternativ direkt in der großen Tabelle oder in der Beleg-Großansicht.</p>
+
+    <h3>Auslage für ein Mitglied erfassen</h3>
+    <p>Wie das Mitglieder-Formular, zusätzlich mit Auswahl des Mitglieds. Fotos werden hier auf max. 1200&nbsp;px verkleinert.</p>
+
+    <h3>Massenerfassung</h3>
+    <p>Ein Betrag/Zweck/Datum/Kategorie für viele Mitglieder gleichzeitig (z.&nbsp;B. Jahresbeitrag als negative Auslage). Alle Mitglieder sind vorausgewählt, einzeln ab­wählbar. Legt pro Mitglied eine Auslage an.</p>
+
+    <h3>Reports</h3>
+    <p>Auswertung nach <strong>Kategorie</strong>, <strong>Mitglied</strong>, <strong>Monat</strong> oder <strong>Status</strong> für einen Zeitraum (Standard: 1.&nbsp;Januar des Jahres bis heute). Aufklappbare Zeilen zeigen die Einzelbelege, Balken den Anteil. Export als CSV (Semikolon-getrennt) direkt aus dem Browser — die Daten kommen aus den bereits geladenen Auslagen, kein Server-Aufruf.</p>
+
+    <h3>Kategorien verwalten</h3>
+    <p>Hinzufügen und Löschen. Eine Kategorie, die noch von einer Auslage benutzt wird, lässt sich nicht löschen.</p>
+
+    <h3>Einzahlung erfassen</h3>
+    <p>Mitglied, Betrag (&gt; 0), Datum, Zweck. Der Betrag wird ins Protokoll geschrieben <strong>und</strong> sofort auf <code>kassenbestand</code> addiert.</p>
+
+    <h3>Nutzerverwaltung</h3>
+    <p>Mitglieder anlegen (Benutzername + Name), sperren/entsperren, löschen. Sperren und Löschen kappen laufende Sitzungen. Der Benutzername <code>kassenwart</code> ist reserviert.</p>
+
+    <h3>Sicherung &amp; Import</h3>
+    <ul class="clean">
+      <li><strong>Cloud Backup (Google Drive)</strong> — schreibt ein CSV nach <code>/home/pi/backups/</code> und lädt es per rclone nach <code>gdrive:Auslagen-Backup/Exporte</code>. Nur auf dem Pi.</li>
+      <li><strong>Lokales Backup (CSV)</strong> — lädt sofort eine CSV-Datei im Browser herunter, ohne Server.</li>
+      <li><strong>CSV importieren</strong> — Datei einlesen, Vorschau­tabelle, Zeilen auswählen, importieren. Erwartet die Spaltenfolge des CSV-Exports; Zeilen ohne Mitglied oder mit Betrag&nbsp;≤&nbsp;0 werden übersprungen.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="kassenbestand">
+  <div class="secthead"><span class="no">§8</span><h2>Kassenbestand-Berechnung</h2></div>
+
+  <figure>
+    <svg viewBox="0 0 860 280" role="img" aria-label="Der gespeicherte Kassenbestand minus die Summe der bezahlten Auslagen ergibt den aktuellen Kassenbestand; davon die Summe der offenen Auslagen abgezogen ergibt die Kasse nach offenen Abzügen. Einzahlungen erhöhen den gespeicherten Wert direkt.">
+      <defs><marker id="ar8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <rect x="40" y="20" width="240" height="54" rx="7" fill="none" stroke="var(--cyan-ink)" stroke-dasharray="4 3"/>
+      <text x="160" y="42" text-anchor="middle" font-size="11" fill="var(--cyan-ink)">Einzahlung (POST /api/einzahlungen)</text>
+      <text x="160" y="59" text-anchor="middle" font-size="11" fill="var(--cyan-ink)">erhöht kassenbestand direkt</text>
+      <line x1="280" y1="47" x2="322" y2="47" stroke="var(--cyan-ink)" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ar8)"/>
+
+      <g font-size="12.5" fill="currentColor">
+        <rect x="324" y="22" width="250" height="50" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="449" y="52" text-anchor="middle">Einstellung <tspan font-family="'IBM Plex Mono',monospace" font-size="11.5">kassenbestand</tspan></text>
+        <line x1="449" y1="72" x2="449" y2="104" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar8)"/>
+        <text x="462" y="93" font-size="11" opacity=".8">−  Σ bezahlte Auslagen</text>
+
+        <rect x="324" y="106" width="250" height="50" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="449" y="130" text-anchor="middle" font-weight="600">Kassenbestand aktuell</text>
+        <text x="449" y="147" text-anchor="middle" font-size="10.5" opacity=".7">dunkle Dashboard-Kachel</text>
+        <line x1="449" y1="156" x2="449" y2="188" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar8)"/>
+        <text x="462" y="177" font-size="11" opacity=".8">−  Σ offene Auslagen</text>
+
+        <rect x="324" y="190" width="250" height="54" rx="7" fill="none" stroke="var(--accent)"/>
+        <text x="449" y="214" text-anchor="middle" font-weight="600" fill="var(--accent-ink)">Kasse nach offenen Abzügen</text>
+        <text x="449" y="231" text-anchor="middle" font-size="10.5" fill="var(--accent-ink)">&lt; 0 → rote Warn-Kachel ⚠</text>
+      </g>
+    </svg>
+    <figcaption><b>Die Berechnung passiert im Browser</b> beim Aufbau des Dashboards, nicht im Server. Der Server speichert nur den einen Wert <code>kassenbestand</code>; „aktuell“ und „nach Abzügen“ werden jedes Mal frisch aus den geladenen Auslagen gerechnet.</figcaption>
+  </figure>
+
+  <div class="note warn">
+    <p class="t">Betriebshinweis</p>
+    <p>Weil bezahlte Auslagen vom gespeicherten <code>kassenbestand</code> abgezogen werden, muss beim <a href="#kassensturz">Kassensturz</a> der <em>tatsächlich gezählte</em> Kassenstand eingetragen werden — nicht der auf dem Dashboard angezeigte. Danach ist die Liste leer und beide Werte sind wieder gleich.</p>
+  </div>
+</section>
+
+<!-- 9 -->
+<section id="kassensturz">
+  <div class="secthead"><span class="no">§9</span><h2>Kassensturz</h2></div>
+  <div class="prose"><p>Der Kassensturz schließt eine Abrechnungs­periode ab: Er sichert den aktuellen Stand und leert danach die Auslagen- und Einzahlungs­tabellen, damit die nächste Periode bei null beginnt.</p></div>
+
+  <figure>
+    <svg viewBox="0 0 950 190" role="img" aria-label="Kassensturz-Ablauf: Aufruf der Route, CSV aller Auslagen in den Backup-Ordner, rclone-Upload nach Google Drive, dann unwiderrufliches Löschen aller Auslagen und Einzahlungen, schließlich Setzen des neuen Kassenbestands.">
+      <defs><marker id="ar9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+      <g font-size="10.5" fill="currentColor">
+        <rect x="16" y="58" width="160" height="74" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="96" y="90" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10">POST</text>
+        <text x="96" y="105" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10">/api/kassensturz</text>
+
+        <line x1="176" y1="95" x2="204" y2="95" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar9)"/>
+        <rect x="206" y="58" width="160" height="74" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="286" y="90" text-anchor="middle">CSV aller Auslagen</text>
+        <text x="286" y="106" text-anchor="middle" opacity=".7">→ /home/pi/backups/</text>
+
+        <line x1="366" y1="95" x2="394" y2="95" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar9)"/>
+        <rect x="396" y="58" width="160" height="74" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="476" y="90" text-anchor="middle">rclone → Drive</text>
+        <text x="476" y="106" text-anchor="middle" opacity=".7">Fehler = nicht kritisch</text>
+
+        <line x1="556" y1="95" x2="584" y2="95" stroke="var(--accent)" stroke-width="1.8" marker-end="url(#ar9)"/>
+        <rect x="586" y="54" width="168" height="82" rx="7" fill="none" stroke="var(--accent)" stroke-width="2"/>
+        <text x="670" y="86" text-anchor="middle" font-weight="600" fill="var(--accent-ink)">DELETE FROM</text>
+        <text x="670" y="102" text-anchor="middle" font-weight="600" fill="var(--accent-ink)">auslagen + einzahlungen</text>
+        <text x="670" y="124" text-anchor="middle" font-size="9.5" fill="var(--accent-ink)">irreversibel</text>
+
+        <line x1="754" y1="95" x2="782" y2="95" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar9)"/>
+        <rect x="784" y="58" width="150" height="74" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="859" y="90" text-anchor="middle">kassenbestand :=</text>
+        <text x="859" y="106" text-anchor="middle">neuerKassenstand</text>
+      </g>
+    </svg>
+    <figcaption><b>Der Upload wird nicht abgewartet.</b> Anders als beim reinen Cloud-Export bricht der Kassensturz auch dann nicht ab, wenn rclone scheitert — er löscht danach trotzdem. Die einzige verlässliche Sicherung ist die lokale <code>.db</code> aus der Nacht sowie die CSV im Backup-Ordner des Pi.</figcaption>
+  </figure>
+
+  <div class="note danger">
+    <p class="t">Achtung</p>
+    <p>Der Kassensturz löscht <strong>alle</strong> Auslagen und Einzahlungen endgültig — auch noch offene. Die App warnt, wenn offene Auslagen existieren, und verlangt eine Bestätigung. Vor einem Kassensturz sicherstellen, dass ein aktuelles <code>.db</code>-Backup existiert und der rclone-Upload funktioniert (<code>rclone lsd gdrive:Auslagen-Backup</code>).</p>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="betrieb">
+  <div class="secthead"><span class="no">§10</span><h2>Datensicherung &amp; Betrieb</h2></div>
+
+  <figure>
+    <svg viewBox="0 0 900 250" role="img" aria-label="Nächtliche Sicherung: Ein Cron-Job um 2 Uhr startet backup-auslagen.sh, das eine lokale Kopie der Datenbank ablegt und zusätzlich per rclone nach Google Drive lädt. Der Upload scheitert bei abgelaufenem Token.">
+      <defs><marker id="ar10" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker>
+      <marker id="ar10w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--warn)"/></marker></defs>
+      <g font-size="11.5" fill="currentColor">
+        <rect x="16" y="98" width="150" height="56" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="91" y="122" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11">cron</text>
+        <text x="91" y="139" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="11">0 2 * * *</text>
+
+        <line x1="166" y1="126" x2="212" y2="126" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar10)"/>
+        <rect x="214" y="98" width="190" height="56" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="309" y="122" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-size="10.5">backup-auslagen.sh</text>
+        <text x="309" y="139" text-anchor="middle" font-size="10" opacity=".65">liegt auf dem Pi</text>
+
+        <path d="M404 116 C 440 96, 452 60, 486 60" fill="none" stroke="currentColor" stroke-width="1.5" marker-end="url(#ar10)"/>
+        <text x="452" y="46" text-anchor="middle" font-size="10" opacity=".8">läuft immer</text>
+        <rect x="488" y="34" width="396" height="52" rx="7" fill="var(--surface-2)" stroke="var(--border)"/>
+        <text x="686" y="56" text-anchor="middle">Kopie <tspan font-family="'IBM Plex Mono',monospace" font-size="10.5">auslagen_JJJJ-MM-TT_02-00.db</tspan></text>
+        <text x="686" y="73" text-anchor="middle" font-size="10.5" opacity=".7">→ /home/pi/backups/</text>
+
+        <path d="M404 136 C 440 168, 452 196, 486 196" fill="none" stroke="var(--warn)" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#ar10w)"/>
+        <rect x="488" y="170" width="396" height="56" rx="7" fill="var(--warn-bg)" stroke="var(--warn)"/>
+        <text x="686" y="192" text-anchor="middle">rclone copy → <tspan font-family="'IBM Plex Mono',monospace" font-size="10.5">gdrive:Auslagen-Backup</tspan></text>
+        <text x="686" y="210" text-anchor="middle" font-size="10" fill="var(--warn)">Token abgelaufen → CRITICAL in backup.log</text>
+      </g>
+    </svg>
+    <figcaption><b>Zwei Sicherungen, eine verlässliche.</b> Die lokale <code>.db</code>-Kopie entsteht jede Nacht unabhängig vom Netz. Der Drive-Upload braucht ein gültiges rclone-OAuth-Token; läuft es ab (<code>invalid_grant</code>), wird das im <code>backup.log</code> als <code>CRITICAL</code> protokolliert, die lokale Kopie entsteht trotzdem.</figcaption>
+  </figure>
+
+  <div class="prose">
+    <h3>Deployment</h3>
+    <p>Änderungen kommen über Git auf den Pi. Dort:</p>
+    <p><code>./deploy.sh</code> &nbsp;→&nbsp; <code>git pull origin main</code> · <code>npm install --omit=dev</code> · <code>pm2 restart auslagen-v2</code> · <code>pm2 status</code></p>
+    <p>Der Neustart meldet alle Nutzer ab (siehe <a href="#anmeldung">§5</a>).</p>
+
+    <h3>rclone-Token erneuern</h3>
+    <p>Wenn der Drive-Upload <code>invalid_grant: maybe token expired</code> meldet:</p>
+    <ul class="clean">
+      <li>Auf dem Pi: <code>rclone config reconnect gdrive:</code></li>
+      <li>Ohne Browser auf dem Pi: den ausgegebenen Befehl <code>rclone authorize "drive" "…"</code> auf einem Rechner mit Browser ausführen, Google autorisieren, das ausgegebene Token bei <code>config_token&gt;</code> einfügen.</li>
+      <li>Prüfen: <code>rclone lsd gdrive:Auslagen-Backup</code></li>
+    </ul>
+
+    <h3>Wiederherstellung</h3>
+    <p>Server stoppen, gewünschte Sicherung als <code>auslagen.db</code> neben <code>server.js</code> legen, Server starten. Fehlende Tabellen (z.&nbsp;B. <code>einzahlungen</code> in alten Backups) und Soft-Delete-Spalten werden beim Start automatisch ergänzt.</p>
+  </div>
+</section>
+
+<!-- 11 -->
+<section id="grenzen">
+  <div class="secthead"><span class="no">§11</span><h2>Bekannte Einschränkungen</h2></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Punkt</th><th>Auswirkung</th></tr></thead>
+      <tbody>
+        <tr><td>Kein Passwort für Mitglieder</td><td>Wer einen Benutzernamen kennt, kann als dieses Mitglied handeln. Das Modell setzt auf Vertrauen im Verein.</td></tr>
+        <tr><td>Sitzungen nur im RAM</td><td>Jeder Server-Neustart (auch jedes Deployment) meldet alle ab.</td></tr>
+        <tr><td class="mono">PUT /api/auslagen/:id</td><td>Keine Rollen-/Eigentümer­prüfung im Server — nur der Browser verhindert das Bearbeiten fremder oder bezahlter Einträge.</td></tr>
+        <tr><td class="mono">DELETE /api/auslagen/:id</td><td>Ebenfalls nur im Browser eingeschränkt; jede gültige Sitzung kann jede Auslage soft-löschen.</td></tr>
+        <tr><td>Belege als Base64 in SQLite</td><td>Die Datenbank wächst mit jedem Foto spürbar (Praxis: von ~1&nbsp;MB auf mehrere MB). Das trifft auch die nächtlichen Kopien.</td></tr>
+        <tr><td>Feste Pfade <code>/home/pi/backups/</code></td><td>Cloud-Export und Kassensturz-Upload laufen nur auf dem Pi, nicht lokal.</td></tr>
+        <tr><td>rclone-Standard-Client</td><td>Google entzieht dem geteilten rclone-Client gelegentlich das Token — der Upload muss dann neu autorisiert werden.</td></tr>
+        <tr><td>Eine SD-Karte</td><td>Fällt sie aus, sind nur die Google-Drive-Kopien übrig. Der Upload muss also laufen.</td></tr>
+        <tr><td>Obergrenze Upload-Größe</td><td><code>express.json({ limit: '20mb' })</code> — sehr viele oder große Fotos in einer Auslage können abgewiesen werden.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 12 -->
+<section id="codeindex">
+  <div class="secthead"><span class="no">§12</span><h2>Funktionsübersicht (Code)</h2></div>
+  <div class="prose"><p>Für die Wartung: welche JavaScript-Funktion in <code>public/index.html</code> zu welcher Route in <code>server.js</code> gehört.</p></div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Funktion</th><th>Frontend (public/index.html)</th><th class="mono">server.js</th></tr></thead>
+      <tbody>
+        <tr><td>Anmeldung</td><td class="mono">handleLogin, handleLogout, api()</td><td class="mono">POST /api/login, /api/logout</td></tr>
+        <tr><td>Daten laden</td><td class="mono">loadData</td><td class="mono">GET /api/auslagen, /api/kategorien, /api/kassenbestand, /api/mitglieder</td></tr>
+        <tr><td>Neue Auslage</td><td class="mono">handleSubmit, handleBelegUpload, compressImage</td><td class="mono">POST /api/auslagen</td></tr>
+        <tr><td>Auslage für Mitglied</td><td class="mono">openAuslageModal, handleAuslageModalSubmit, handleAuslageModalBeleg</td><td class="mono">POST /api/auslagen</td></tr>
+        <tr><td>Bearbeiten</td><td class="mono">openEditModal, saveEdit</td><td class="mono">PUT /api/auslagen/:id</td></tr>
+        <tr><td>Löschen (soft)</td><td class="mono">deleteAuslage</td><td class="mono">DELETE /api/auslagen/:id</td></tr>
+        <tr><td>Als bezahlt markieren</td><td class="mono">updateStatus, bezahleAusgewaehlt</td><td class="mono">PATCH /api/auslagen/:id/status</td></tr>
+        <tr><td>Auszahlungs-Dialog</td><td class="mono">openBelegModal, toggleBeleg, bezahleAusgewaehlt</td><td class="mono">PATCH /api/auslagen/:id/status (mehrfach)</td></tr>
+        <tr><td>Beleg-Großansicht</td><td class="mono">viewBeleg, renderBelegOverlay, getBelege</td><td>—</td></tr>
+        <tr><td>Massenerfassung</td><td class="mono">openMassenModal, handleMassenerfassung, toggleMassenMitglied</td><td class="mono">POST /api/auslagen/massen</td></tr>
+        <tr><td>CSV-Import</td><td class="mono">handleImportFile, toggleImportRow, handleImport</td><td class="mono">POST /api/auslagen/bulk</td></tr>
+        <tr><td>Reports</td><td class="mono">openReportModal, generateReport, toggleReportRow, exportReport</td><td>— (nur clientseitig)</td></tr>
+        <tr><td>Lokales CSV-Backup</td><td class="mono">exportCSV</td><td>— (nur clientseitig)</td></tr>
+        <tr><td>Cloud-Backup</td><td class="mono">exportToGDrive</td><td class="mono">POST /api/auslagen/export-gdrive</td></tr>
+        <tr><td>Einzahlung</td><td class="mono">openEinzahlungModal, handleEinzahlung</td><td class="mono">GET/POST /api/einzahlungen</td></tr>
+        <tr><td>Kategorien</td><td class="mono">openKategorienModal, addKategorie, deleteKategorie</td><td class="mono">GET/POST/DELETE /api/kategorien</td></tr>
+        <tr><td>Nutzerverwaltung</td><td class="mono">openNutzerModal, handleAddNutzer, handleToggleSperren, handleDeleteNutzer</td><td class="mono">/api/mitglieder, /api/mitglieder/admin, /:username/sperren, DELETE /:username</td></tr>
+        <tr><td>Dashboard &amp; Kacheln</td><td class="mono">renderDashboard, renderPanelModal</td><td class="mono">GET /api/auslagen, /api/kassenbestand, /api/einzahlungen</td></tr>
+        <tr><td>Kassensturz</td><td class="mono">openKassensturz, handleKassensturz</td><td class="mono">POST /api/kassensturz</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  Diese Dokumentation beschreibt den Stand von <span class="mono">server.js</span> und <span class="mono">public/index.html</span> (Version 2.0.0, Commit eb660a6, 8.&nbsp;September 2026). Bei Änderungen am Code bitte hier nachziehen.
+</footer>
+
+</div>
