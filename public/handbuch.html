@@ -1,7 +1,14 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Auslagen-Handbuch G&A</title>
 <meta name="description" content="Technische Dokumentation der Auslagen-Verwaltung von Gut und Aussehend: Funktionen, Datenmodell, API und Betrieb.">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <style>
+  :root{color-scheme:light dark}
+  img{max-width:100%;height:auto}
   :root{
     --bg:#f4f6f8; --surface:#ffffff; --surface-2:#eaeff2; --ink:#0a1929; --ink-2:#4a5b6b;
     --border:#d5dee3; --accent:#e91e7e; --accent-ink:#bd1560; --cyan:#4fd9d9; --cyan-ink:#0c6570;
@@ -105,6 +112,8 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important; animation:none!important}}
 </style>
+</head>
+<body>
 
 <div class="page">
 
@@ -324,7 +333,7 @@
 
   <div class="prose">
     <dl class="kv">
-      <dt>Kassenwart-Login</dt><dd>Benutzername <code>kassenwart</code>, Passwort <code>Gut-Aussehend</code> (Konstante <code>KASSENWART_PASSWORT</code> in <code>server.js</code>)</dd>
+      <dt>Kassenwart-Login</dt><dd>Benutzername <code>kassenwart</code>; Passwort = Konstante <code>KASSENWART_PASSWORT</code> in <code>server.js</code> (nicht öffentlich)</dd>
       <dt>Mitglied-Login</dt><dd>nur der Benutzername, z.&nbsp;B. <code>lfucke</code> — kein Passwort</dd>
       <dt>Token</dt><dd><code>crypto.randomUUID()</code>, im Header <code>Authorization: Bearer &lt;token&gt;</code></dd>
       <dt>Ablauf</dt><dd>8 Stunden; abgelaufene Sitzungen werden stündlich aus der Map entfernt</dd>
@@ -616,3 +625,5 @@
 </footer>
 
 </div>
+</body>
+</html>
